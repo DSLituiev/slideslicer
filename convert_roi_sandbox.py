@@ -73,19 +73,6 @@ for rr in regions:
 #     dict(name=name, vertices = get_vertices(rr))
     regionlist.append(attrs_)
 
-#cell#
-
-# rr = regions[0]
-# attrs_
-# kk,vv
-# attrs_["id"]
-attrs_.keys()
-# type(regions[1]["id"])
-
-#cell#
-
-# [rr["area"] for rr in regionlist]
-
 # for an ellipse, 
 # 
 #    area = $\pi \times r \times R$
@@ -343,6 +330,14 @@ img.shape
 
 #cell#
 
+def get_contour_centre(vertices):
+    mmnts = cv2.moments(np.asarray(vertices, dtype='int32'))
+    cX = int(mmnts["m10"] / mmnts["m00"])
+    cY = int(mmnts["m01"] / mmnts["m00"])
+    return (cX, cY)
+
+#cell#
+
 # cv2.moments(co)
 class CropRotateRoi():
     def __init__(self, img, co, enlarge=1.00,
@@ -481,31 +476,29 @@ plt.plot(crroi[:,0], crroi[:,1])
 #cell#
 
 def plot_roi(roi, **kwargs):
+    roi = np.asarray(roi)
     return plt.plot(roi[:,0], roi[:,1], **kwargs)
 
 #cell#
 
-def transform_roi_to_rotated_chunk(transform_mag, rr, roi_start, roi_size,):
-    vertices = np.asarray(rr["vertices"])
+def within_roi(vertices, roi_start, roi_size,):
     left = (vertices>=roi_start).all(0).all()
     right = (vertices<=(roi_start + roi_size)).all(0).all()
+    return left and right
+
+def transform_roi_to_rotated_chunk(transform_mag, rr, roi_start, roi_size,):
+    vertices = np.asarray(rr["vertices"])
 #     print(rr["name"], left, right)
-    if left and right:
+    if within_roi(vertices, roi_start, roi_size,):
 #         print(rr["name"])
-        rois_within_chunk.append(rr)
-        roi = rr
+        roi = rr.copy()
+        centroid = get_contour_centre(roi["vertices"])
+        roi["centroid_within_slice"] = within_roi(centroid, roi_start, roi_size,)
         roi["vertices"] = transform_mag.apply_roi(np.asarray(rr["vertices"]), use_offset=True)
         if (roi["vertices"]<0).all(0).any():
             return None
         else:
             return roi
-
-# ratio = get_thumbnail_magnification(slide)
-# rois_within_chunk = []
-# for rr in regionlist:
-#     rr = transform_roi_to_rotated_chunk(transform_mag, rr, ratio, roi_start, roi_size,)
-#     if rr is not None:
-#         rois_within_chunk.append(rr)
 
 #cell#
 
@@ -526,7 +519,9 @@ def get_highres_roi(slide, chunkroi_small,
                           angle=angle,
                           use_offset=True,
                           borderValue=median_color)
-    region_ = transform_mag(region, crop=True)
+    region_ = transform_mag(region,
+#                             crop=True
+                           )
     # transform feature rois:
     rois_within_chunk = []
     for rr in feature_rois:
@@ -542,7 +537,7 @@ def get_highres_roi(slide, chunkroi_small,
     # take the longest contour
     maxidx = np.argmax([len(x) for x in chunkroi_large_refined])
     chunkroi_large_refined = chunkroi_large_refined[maxidx]
-    return region_, chunkroi_large_refined, rois_within_chunk
+    return transform_roi_to_rotated_chunk, region_, chunkroi_large_refined, rois_within_chunk
 
 # ## Now we can slice the chunk horizonatally, and stack highres images from the slices
 
@@ -559,17 +554,19 @@ print(nsteps)
 #cell#
 
 ratio = get_thumbnail_magnification(slide)
-for step in range(1,nsteps):
+for step in range(1, nsteps):
     currentchunk = crimg[:,stepsize*step:stepsize*(step+1),:]
     chunk_contours = get_chunk_countours(currentchunk, 
                                minlen = 10 , color=False,
                                filtersize=7)
+    slice_offset = np.r_[stepsize*step,0]
+    chunk_contours += slice_offset
     assert len(chunk_contours) ==1
     chunk_contour = chunk_contours[0]
     chunk_slice_contour_origcoord = np.linalg.solve(CropRotateRoi._pad_affine_matrix_(cr.affine_matrix), 
                                                     CropRotateRoi._pad_vectors_(chunk_contour).T).T[:,:2]
     
-    region, chunk_slice_contour_origcoord_mag, rois_within_chunk = get_highres_roi(slide,
+    trnsf, region, chunk_slice_roi_origcoord_mag, rois_within_chunk = get_highres_roi(slide,
                                                                                    chunk_slice_contour_origcoord,
                                                                                    regionlist,
                                                                                    angle=cr.angle
@@ -578,119 +575,27 @@ for step in range(1,nsteps):
 
 #cell#
 
-# plt.imshow(currentchunk)
-# plot_roi(chunk_contour)
+# rois_within_chunk
 
 #cell#
 
-# plt.imshow(region)
-# plot_roi(chunk_contour)
+plt.imshow(img)
+plot_roi( chunk_slice_contour_origcoord )
 
 #cell#
 
-# for rr in rois_within_chunk:
-#     roi = transform_mag.apply_roi(np.asarray(rr["vertices"]), use_offset=True)
-#     if (roi<0).all(0).any():
-#         continue
-#     plt.plot(roi[:,0],
-#              roi[:,1])
+plt.imshow(currentchunk)
+plot_roi(chunk_contour-slice_offset)
 
 #cell#
 
-rois_within_chunk
+# plot_roi(chunk_slice_contour_origcoord)
 
 #cell#
 
 plt.imshow(region)
-plot_roi(chunk_slice_contour_origcoord_mag)
-for roi in rois_within_chunk:
-    plt.plot(roi["vertices"][:,0],
-             roi["vertices"][:,1])
-
-#cell#
-
-# plt.imshow(mask)
-# plot_roi(contours[0])
-
-#cell#
-
-#cell#
-
-ratio = get_thumbnail_magnification(slide)
-ratio
-
-#cell#
-
-roi_start, roi_size = roi_loc(co)
-roi_start, roi_size
-
-#cell#
-
-roi_start + roi_size
-
-#cell#
-
-def scale_roi(co, start, ratio=1):
-    return (co - start)*ratio
-
-#cell#
-
-(vertices<=(roi_start + roi_size)).all(0).all()
-
-#cell#
-
-# co
-
-#cell#
-
-((co-roi_start)*ratio).max(0), region.size
-
-#cell#
-
-# co*ratio - (co*ratio).min(0)
-
-#cell#
-
-# plot_roi(co_scaled)
-# median_color
-
-#cell#
-
-# co = contours[0]
-# print(co[:2])
-# cr = CropRotateRoi(region, co_scaled, enlarge=1.07, offset=True)
-cr = CropRotateRoi(region, co*ratio, enlarge=1.05, 
-                   use_offset=True, borderValue=median_color)
-region, co_scaled_ = cr(region, co*ratio, crop=True)
-region.shape
-
-#cell#
-
-plt.imshow(region)
-
-#cell#
-
-mask_ = get_chunk_masks(region, color=True, filtersize=15)
-chunk_contour = get_contours_from_mask(mask_, minlen = 100)
-del mask
-
-#cell#
-
-# chunk_contour
-plot_roi(chunk_contour[0])
-
-#cell#
-
-plt.figure(figsize=(20,8))
-plt.imshow(np.asarray(region))
-
-plot_roi(co_scaled_)
-plot_roi(chunk_contour[0])
+plot_roi(chunk_slice_roi_origcoord_mag)
 for rr in rois_within_chunk:
-    roi = cr.apply_roi(np.asarray(rr["vertices"]), use_offset=True)
-    if (roi<0).all(0).any():
-        continue
-    plt.plot(roi[:,0],
-             roi[:,1])
+    plot_roi(rr["vertices"])
 
 #cell#
