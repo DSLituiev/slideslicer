@@ -1,8 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
-
+#cell#
 
 from bs4 import BeautifulSoup
 import numpy as np
@@ -12,15 +11,11 @@ import re
 import json
 # import pyaml
 
-
-# In[2]:
-
+#cell#
 
 # see https://github.com/bgilbert/anonymize-slide
 
-
-# In[3]:
-
+#cell#
 
 fnxml = "examples/6371/6371 1.xml"
 fnjson = re.sub(".xml$", ".json", fnxml)
@@ -28,15 +23,9 @@ fnjson = re.sub(".xml$", ".json", fnxml)
 with open(fnxml) as fh:
     soup = BeautifulSoup(fh, 'lxml')
 
+#cell#
 
-# In[ ]:
-
-
-
-
-
-# In[4]:
-
+#cell#
 
 def get_ellipse_points(verticeslist, num=200):
     a,b = tuple(abs(verticeslist[1] - verticeslist[0])/2)
@@ -47,9 +36,7 @@ def get_ellipse_points(verticeslist, num=200):
     return np.c_[x,y].tolist()
 #     return ((x),list(y))
 
-
-# In[5]:
-
+#cell#
 
 def get_vertices(region):
     verticeslist = [cc for cc in region.vertices.children if cc!='\n']
@@ -60,85 +47,91 @@ def get_vertices(region):
         verticeslist = get_ellipse_points(np.asarray(verticeslist), num=200)
     return verticeslist
 
-
-# In[6]:
-
+#cell#
 
 regions = soup.find_all("region")
 
-
-# In[7]:
-
+#cell#
 
 regionlist = []
 for rr in regions:
-    name = rr.get("text").lower().rstrip('.')
-    regionlist.append(dict(name=name, vertices = get_vertices(rr)))
+#     name = rr.get("text").lower().rstrip('.')
+    attrs_ = rr.attrs.copy()
+    if ("text" in attrs_) and not ("name" in attrs_):
+        attrs_["name"] = attrs_.pop("text").lower().rstrip('.')
+    for kk,vv in attrs_.items():
+        if isinstance(vv,str) and vv.isdigit():
+            attrs_[kk] = int(vv)
+        else:
+            try:
+                attrs_[kk] = float(vv)
+            except:
+                if attrs_[kk]=='':
+                    attrs_[kk]=None
+                continue
+    attrs_["vertices"] = get_vertices(rr)
+#     dict(name=name, vertices = get_vertices(rr))
+    regionlist.append(attrs_)
 
+#cell#
+
+# rr = regions[0]
+# attrs_
+# kk,vv
+# attrs_["id"]
+attrs_.keys()
+# type(regions[1]["id"])
+
+#cell#
+
+# [rr["area"] for rr in regionlist]
 
 # for an ellipse, 
 # 
 #    area = $\pi \times r \times R$
 
-# In[8]:
-
+#cell#
 
 # ellipses = [{"vertices":get_vertices(rr), "length": rr["length"], "area":rr["area"]} for rr in regions if rr["type"]=='2']
 # ell = ellipses[1]
 
-
-# In[9]:
-
+#cell#
 
 pd.Series([rr["name"] for rr in regionlist]).value_counts()
 
-
-# In[10]:
-
+#cell#
 
 with open(fnjson, 'w+') as fh:
     json.dump(regionlist, fh)
 
-
-# In[11]:
-
+#cell#
 
 # with open(fnyaml, 'w+') as fh:
 #     pyaml.dump(regionlist, fh)
 
-
-# In[12]:
-
+#cell#
 
 from matplotlib import pyplot as plt
 get_ipython().magic('matplotlib inline')
 
-
-# In[13]:
-
+#cell#
 
 for rr in regionlist:
     plt.plot([x for x,_ in  rr["vertices"]],
              [y for _,y in  rr["vertices"]])
 
-
-# In[14]:
-
+#cell#
 
 # rr
 
-
-# In[15]:
-
+#cell#
 
 import openslide
 from PIL import Image, ImageDraw
 import cv2
 import numpy as np
 
-
-# In[16]:
-
+#cell#
 
 def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3):
     img = Image.new('L', (width, height), 0)
@@ -153,40 +146,26 @@ def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3):
         mask = fill*np.asarray(np.asarray(img,)>thr, dtype='uint8')
     return mask
 
-
-# In[17]:
-
+#cell#
 
 fnsvs = "examples/6371/6371 1.svs"
 
-
-# In[18]:
-
+#cell#
 
 slide = openslide.OpenSlide(fnsvs)
 img = np.asarray(slide.associated_images["thumbnail"])
 
-
-# In[19]:
-
+#cell#
 
 slide.associated_images.keys()
 
-
-# In[20]:
-
+#cell#
 
 # slide.associated_images['label'] = None
 
+#cell#
 
-# In[ ]:
-
-
-
-
-
-# In[21]:
-
+#cell#
 
 macro =  np.asarray(slide.associated_images["macro"])
 macrohsv = cv2.cvtColor(macro,  cv2.COLOR_BGR2HSV)
@@ -201,15 +180,11 @@ contour = contours[np.argmax([x.shape[0] for x in contours])]
 del contours
 len(contour)
 
-
-# In[22]:
-
+#cell#
 
 # contour
 
-
-# In[23]:
-
+#cell#
 
 def map_countour_bbox(contour, slide_dimensions,
                      SUBSAMPLE_RATE=8):
@@ -247,9 +222,7 @@ def map_countour_bbox(contour, slide_dimensions,
     img_hr.thumbnail(target_size, Image.ANTIALIAS)
     return img_hr
 
-
-# In[24]:
-
+#cell#
 
 # plt.figure(figsize = (18,10))
 # plt.imshow(macro[ymin:ymax, xmin:xmax])
@@ -257,60 +230,34 @@ def map_countour_bbox(contour, slide_dimensions,
 # # for co in [contour]:
 # #     plt.plot(co[:,0], co[:,1])
 
+#cell#
 
-# In[ ]:
-
-
-
-
-
-# In[25]:
-
+#cell#
 
 # Image.fromarray(macro).save("macro.png")
 # cv2.imwrite("macro.png", macro)
 
+#cell#
 
-# In[ ]:
+#cell#
 
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[26]:
-
+#cell#
 
 th = slide.associated_images["thumbnail"]
 th.getbbox()
 
-
-# In[27]:
-
+#cell#
 
 for kk,vv in slide.associated_images.items():
     print(kk, vv.size)
 
-
-# In[28]:
-
+#cell#
 
 plt.imshow(img)
 
+#cell#
 
-# In[ ]:
-
-
-
-
-
-# In[74]:
-
+#cell#
 
 def get_median_color(slide):
     return np.apply_over_axes(np.median, 
@@ -319,9 +266,7 @@ def get_median_color(slide):
 
 median_color = get_median_color(slide)
 
-
-# In[30]:
-
+#cell#
 
 def get_chunk_masks(img, color=False, filtersize=7,
                    lower = [0, 0, 180],
@@ -342,7 +287,6 @@ def get_chunk_masks(img, color=False, filtersize=7,
         ret3, mask = cv2.threshold(blur,0,1,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     return (~mask.astype(bool)).astype('uint8')
 
-
 def get_contours_from_mask(mask, minlen = 50):
     im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
@@ -355,9 +299,7 @@ def get_chunk_countours(img, color=False, filtersize=7, minlen = 100):
     contours = get_contours_from_mask(mask, minlen = minlen)
     return contours
 
-
-# In[31]:
-
+#cell#
 
 def get_thumbnail_magnification(slide):
     ratio = np.asarray(slide.dimensions) / np.asarray(slide.associated_images["thumbnail"].size)
@@ -368,69 +310,38 @@ def roi_loc(roi):
     xmax, ymax = roi.max(0)
     return np.r_[xmin, ymin], np.r_[xmax-xmin, ymax-ymin]
 
+#cell#
 
-# In[ ]:
+#cell#
 
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[94]:
-
+#cell#
 
 mask = get_chunk_masks(img, color=False, filtersize=7)
 contours = get_contours_from_mask(mask, minlen = 100)
 
-
-# In[33]:
-
+#cell#
 
 plt.imshow(mask)
 
+#cell#
 
-# In[ ]:
-
-
-
-
-
-# In[34]:
-
+#cell#
 
 plt.figure(figsize = (18,10))
 plt.imshow(img)
 for co in contours:
     plt.plot(co[:,0], co[:,1])
 
-
-# In[35]:
-
+#cell#
 
 img.shape
 
-
-# In[36]:
-
-
-height, width, _ = img.shape
-# objmask = get_roi_mask(co, width, height, fill=1, shape='polygon', radius=3)
-
-
-# In[37]:
-
+#cell#
 
 # objmask = np.zeros((height,width), np.uint8)
 # objmask = cv2.fillPoly(objmask, [co], 1)
 
-
-# In[125]:
-
+#cell#
 
 # cv2.moments(co)
 class CropRotateRoi():
@@ -545,9 +456,12 @@ class CropRotateRoi():
         else:
             return out
 
+#cell#
 
-# In[126]:
+height, width, _ = img.shape
+# objmask = get_roi_mask(co, width, height, fill=1, shape='polygon', radius=3)
 
+#cell#
 
 # cropped, crop_contour = crop_rotate_contour(img, co)
 co = contours[2]
@@ -557,78 +471,95 @@ cr = CropRotateRoi(img, co, enlarge=1.0, borderValue=median_color)
 crimg = cr(img, crop=False)
 crroi = cr(co)
 
-
-# In[127]:
-
+#cell#
 
 plt.figure(figsize=(15,2))
 plt.imshow(crimg)
 
 plt.plot(crroi[:,0], crroi[:,1])
 
-
-# In[54]:
-
+#cell#
 
 def plot_roi(roi, **kwargs):
     return plt.plot(roi[:,0], roi[:,1], **kwargs)
 
+#cell#
 
-# In[148]:
+def transform_roi_to_rotated_chunk(transform_mag, rr, roi_start, roi_size,):
+    vertices = np.asarray(rr["vertices"])
+    left = (vertices>=roi_start).all(0).all()
+    right = (vertices<=(roi_start + roi_size)).all(0).all()
+#     print(rr["name"], left, right)
+    if left and right:
+#         print(rr["name"])
+        rois_within_chunk.append(rr)
+        roi = rr
+        roi["vertices"] = transform_mag.apply_roi(np.asarray(rr["vertices"]), use_offset=True)
+        if (roi["vertices"]<0).all(0).any():
+            return None
+        else:
+            return roi
 
+# ratio = get_thumbnail_magnification(slide)
+# rois_within_chunk = []
+# for rr in regionlist:
+#     rr = transform_roi_to_rotated_chunk(transform_mag, rr, ratio, roi_start, roi_size,)
+#     if rr is not None:
+#         rois_within_chunk.append(rr)
 
-def get_highres_roi(slide, roi, color=True, filtersize=35, minlen=500,
-                    median_color=None,
-                    angle=None
+#cell#
+
+def get_highres_roi(slide, chunkroi_small, 
+                    feature_rois = [],
+                    color=True, filtersize=35, minlen=500,
+                    median_color=None, angle=None
                     ):
     if median_color is None:
         median_color = get_median_color(slide)
     ratio = get_thumbnail_magnification(slide)
     
-    roi_start, roi_size = roi_loc(roi)
+    roi_start, roi_size = roi_loc(chunkroi_small)
     region = slide.read_region((roi_start*ratio).astype(int), 0, 
                                (roi_size*ratio).astype(int))
 
-    crmag = CropRotateRoi(region, roi*ratio,
+    transform_mag = CropRotateRoi(region, chunkroi_small*ratio,
                           angle=angle,
                           use_offset=True,
                           borderValue=median_color)
-    region_, co_scaled_ = crmag(region, roi*ratio, crop=True)
+    region_ = transform_mag(region, crop=True)
+    # transform feature rois:
+    rois_within_chunk = []
+    for rr in feature_rois:
+        rr = transform_roi_to_rotated_chunk(transform_mag, rr, 
+                                            roi_start*ratio, roi_size*ratio,)
+        if rr is not None:
+            print(rr["name"])
+            rois_within_chunk.append(rr)
     # re-estimate the contour
     mask_ = get_chunk_masks(region_, color=color, filtersize=filtersize)
-    chunk_contour = get_contours_from_mask(mask_, minlen = minlen)
-    print(len(chunk_contour))
-    assert len(chunk_contour)>0
+    chunkroi_large_refined = get_contours_from_mask(mask_, minlen = minlen)
+    assert len(chunkroi_large_refined)>0
     # take the longest contour
-    maxidx = np.argmax([len(x) for x in chunk_contour])
-    chunk_contour = chunk_contour[maxidx]
-    return region, chunk_contour
-
+    maxidx = np.argmax([len(x) for x in chunkroi_large_refined])
+    chunkroi_large_refined = chunkroi_large_refined[maxidx]
+    return region_, chunkroi_large_refined, rois_within_chunk
 
 # ## Now we can slice the chunk horizonatally, and stack highres images from the slices
 
-# In[43]:
-
+#cell#
 
 np.ceil(crimg.shape[1]/int(np.ceil(crimg.shape[1]/100)))
 
-
-# In[89]:
-
+#cell#
 
 stepsize = 100
 nsteps = int(np.ceil(crimg.shape[1]/stepsize))
 print(nsteps)
 
+#cell#
 
-# In[149]:
-
-
-# rotation_matrix = cr.rotation_matrix.copy()
-# rotation_matrix[:,2] *= ratio
-# rotation_matrix
-
-for step in range(nsteps):
+ratio = get_thumbnail_magnification(slide)
+for step in range(1,nsteps):
     currentchunk = crimg[:,stepsize*step:stepsize*(step+1),:]
     chunk_contours = get_chunk_countours(currentchunk, 
                                minlen = 10 , color=False,
@@ -638,106 +569,92 @@ for step in range(nsteps):
     chunk_slice_contour_origcoord = np.linalg.solve(CropRotateRoi._pad_affine_matrix_(cr.affine_matrix), 
                                                     CropRotateRoi._pad_vectors_(chunk_contour).T).T[:,:2]
     
-    region, chunk_slice_contour_origcoord_mag = get_highres_roi(slide, chunk_slice_contour_origcoord,
-                                                               angle=cr.angle
-                                                               )
+    region, chunk_slice_contour_origcoord_mag, rois_within_chunk = get_highres_roi(slide,
+                                                                                   chunk_slice_contour_origcoord,
+                                                                                   regionlist,
+                                                                                   angle=cr.angle
+                                                                                   )
     break
 
+#cell#
 
-# In[153]:
+# plt.imshow(currentchunk)
+# plot_roi(chunk_contour)
 
+#cell#
 
-plt.imshow(region_)
+# plt.imshow(region)
+# plot_roi(chunk_contour)
+
+#cell#
+
+# for rr in rois_within_chunk:
+#     roi = transform_mag.apply_roi(np.asarray(rr["vertices"]), use_offset=True)
+#     if (roi<0).all(0).any():
+#         continue
+#     plt.plot(roi[:,0],
+#              roi[:,1])
+
+#cell#
+
+rois_within_chunk
+
+#cell#
+
+plt.imshow(region)
 plot_roi(chunk_slice_contour_origcoord_mag)
+for roi in rois_within_chunk:
+    plt.plot(roi["vertices"][:,0],
+             roi["vertices"][:,1])
 
-
-# In[578]:
-
+#cell#
 
 # plt.imshow(mask)
 # plot_roi(contours[0])
 
+#cell#
 
-# In[562]:
-
-
-
-
-
-# In[466]:
-
+#cell#
 
 ratio = get_thumbnail_magnification(slide)
 ratio
 
-
-# In[467]:
-
+#cell#
 
 roi_start, roi_size = roi_loc(co)
 roi_start, roi_size
 
-
-# In[468]:
-
+#cell#
 
 roi_start + roi_size
 
-
-# In[129]:
-
+#cell#
 
 def scale_roi(co, start, ratio=1):
     return (co - start)*ratio
 
-
-# In[470]:
-
-
-rois_within_chunk = []
-for rr in regionlist:
-    vertices = np.asarray(rr["vertices"]/ratio)
-    left = (vertices>=roi_start).all(0).all()
-    right = (vertices<=(roi_start + roi_size)).all(0).all()
-#     print(rr["name"], left, right)
-    if left and right:
-        print(rr["name"])
-        rois_within_chunk.append(rr)
-
-
-# In[471]:
-
+#cell#
 
 (vertices<=(roi_start + roi_size)).all(0).all()
 
-
-# In[473]:
-
+#cell#
 
 # co
 
-
-# In[150]:
-
+#cell#
 
 ((co-roi_start)*ratio).max(0), region.size
 
-
-# In[212]:
-
+#cell#
 
 # co*ratio - (co*ratio).min(0)
 
-
-# In[304]:
-
+#cell#
 
 # plot_roi(co_scaled)
 # median_color
 
-
-# In[399]:
-
+#cell#
 
 # co = contours[0]
 # print(co[:2])
@@ -747,30 +664,22 @@ cr = CropRotateRoi(region, co*ratio, enlarge=1.05,
 region, co_scaled_ = cr(region, co*ratio, crop=True)
 region.shape
 
-
-# In[386]:
-
+#cell#
 
 plt.imshow(region)
 
-
-# In[402]:
-
+#cell#
 
 mask_ = get_chunk_masks(region, color=True, filtersize=15)
 chunk_contour = get_contours_from_mask(mask_, minlen = 100)
 del mask
 
-
-# In[403]:
-
+#cell#
 
 # chunk_contour
 plot_roi(chunk_contour[0])
 
-
-# In[406]:
-
+#cell#
 
 plt.figure(figsize=(20,8))
 plt.imshow(np.asarray(region))
@@ -784,9 +693,4 @@ for rr in rois_within_chunk:
     plt.plot(roi[:,0],
              roi[:,1])
 
-
-# In[397]:
-
-
-
-
+#cell#
