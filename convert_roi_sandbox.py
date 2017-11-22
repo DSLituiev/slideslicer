@@ -39,77 +39,7 @@ def get_vertices(region):
         verticeslist = get_ellipse_points(np.asarray(verticeslist), num=200)
     return verticeslist
 
-# ## Read XML ROI, convert, and save as JSON
-
-#cell#
-
-fnxml = "examples/6371/6371 1.xml"
-fnjson = re.sub(".xml$", ".json", fnxml)
-# fnyaml = re.sub(".xml$", ".yaml", fnxml)
-with open(fnxml) as fh:
-    soup = BeautifulSoup(fh, 'lxml')
-
-#cell#
-
-regions = soup.find_all("region")
-
-#cell#
-
-regionlist = []
-for rr in regions:
-#     name = rr.get("text").lower().rstrip('.')
-    attrs_ = rr.attrs.copy()
-    if ("text" in attrs_) and not ("name" in attrs_):
-        attrs_["name"] = attrs_.pop("text").lower().rstrip('.')
-    for kk,vv in attrs_.items():
-        if isinstance(vv,str) and vv.isdigit():
-            attrs_[kk] = int(vv)
-        else:
-            try:
-                attrs_[kk] = float(vv)
-            except:
-                if attrs_[kk]=='':
-                    attrs_[kk]=None
-                continue
-    attrs_["vertices"] = get_vertices(rr)
-#     dict(name=name, vertices = get_vertices(rr))
-    regionlist.append(attrs_)
-
-# for an ellipse, 
-# 
-#    area = $\pi \times r \times R$
-
-#cell#
-
-# ellipses = [{"vertices":get_vertices(rr), "length": rr["length"], "area":rr["area"]} for rr in regions if rr["type"]=='2']
-# ell = ellipses[1]
-
-#cell#
-
-pd.Series([rr["name"] for rr in regionlist]).value_counts()
-
-#cell#
-
-with open(fnjson, 'w+') as fh:
-    json.dump(regionlist, fh)
-
-#cell#
-
-# with open(fnyaml, 'w+') as fh:
-#     pyaml.dump(regionlist, fh)
-
-#cell#
-
-from matplotlib import pyplot as plt
-get_ipython().magic('matplotlib inline')
-
-#cell#
-
-for rr in regionlist:
-    plt.plot([x for x,_ in  rr["vertices"]],
-             [y for _,y in  rr["vertices"]])
-
-# # Rotating, slicing, and stitching the picture
+# ## functions for rotating, slicing, and stitching the picture
 
 #cell#
 
@@ -415,6 +345,91 @@ def get_highres_roi(slide, chunkroi_small,
 
 #cell#
 
+def get_roi_dict(contour, name='tissue', id=0, sq_micron_per_pixel=None):
+    """input: 
+        contour: numpy array
+    """
+    cdict = {'id':id, 
+            'name': name,
+            'vertices':contour.tolist(),
+           'area': cv2.contourArea(np.asarray(roi["vertices"], dtype='int32'))
+           }
+    if sq_micron_per_pixel:
+        cdict['areamicrons'] = micron_per_pixel*cdict['area']
+    return cdict
+
+# ## Read XML ROI, convert, and save as JSON
+
+#cell#
+
+fnxml = "examples/6371/6371 1.xml"
+fnjson = re.sub(".xml$", ".json", fnxml)
+# fnyaml = re.sub(".xml$", ".yaml", fnxml)
+with open(fnxml) as fh:
+    soup = BeautifulSoup(fh, 'lxml')
+
+#cell#
+
+regions = soup.find_all("region")
+
+#cell#
+
+roilist = []
+for rr in regions:
+#     name = rr.get("text").lower().rstrip('.')
+    attrs_ = rr.attrs.copy()
+    if ("text" in attrs_) and not ("name" in attrs_):
+        attrs_["name"] = attrs_.pop("text").lower().rstrip('.')
+    for kk,vv in attrs_.items():
+        if isinstance(vv,str) and vv.isdigit():
+            attrs_[kk] = int(vv)
+        else:
+            try:
+                attrs_[kk] = float(vv)
+            except:
+                if attrs_[kk]=='':
+                    attrs_[kk]=None
+                continue
+    attrs_["vertices"] = get_vertices(rr)
+#     dict(name=name, vertices = get_vertices(rr))
+    roilist.append(attrs_)
+
+# for an ellipse, 
+# 
+#    area = $\pi \times r \times R$
+
+#cell#
+
+# ellipses = [{"vertices":get_vertices(rr), "length": rr["length"], "area":rr["area"]} for rr in regions if rr["type"]=='2']
+# ell = ellipses[1]
+
+#cell#
+
+pd.Series([rr["name"] for rr in roilist]).value_counts()
+
+#cell#
+
+with open(fnjson, 'w+') as fh:
+    json.dump(roilist, fh)
+
+#cell#
+
+# with open(fnyaml, 'w+') as fh:
+#     pyaml.dump(roilist, fh)
+
+#cell#
+
+from matplotlib import pyplot as plt
+get_ipython().magic('matplotlib inline')
+
+#cell#
+
+for rr in roilist:
+    plt.plot([x for x,_ in  rr["vertices"]],
+             [y for _,y in  rr["vertices"]])
+
+# ## Extract tissue chunk ROIs
+
 #cell#
 
 fnsvs = "examples/6371/6371 1.svs"
@@ -432,31 +447,6 @@ slide.associated_images.keys()
 
 #cell#
 
-# Image.fromarray(macro).save("macro.png")
-# cv2.imwrite("macro.png", macro)
-
-#cell#
-
-macro =  np.asarray(slide.associated_images["macro"])
-macrohsv = cv2.cvtColor(macro,  cv2.COLOR_BGR2HSV)
-# For HSV, Hue range is [0,179], Saturation range is [0,255] and Value range is [0,255]. 
-lower = np.r_[59, 250, 242]
-upper = np.r_[61, 255, 255]
-
-mask = cv2.inRange(macrohsv, lower, upper)
-_, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-contours = [np.squeeze(x) for x in contours if x.shape[0]>10]
-contour = contours[np.argmax([x.shape[0] for x in contours])]
-del contours
-len(contour)
-
-#cell#
-
-th = slide.associated_images["thumbnail"]
-th.getbbox()
-
-#cell#
-
 for kk,vv in slide.associated_images.items():
     print(kk, vv.size)
 
@@ -470,6 +460,22 @@ plt.imshow(img)
 
 mask = get_chunk_masks(img, color=False, filtersize=7)
 contours = get_contours_from_mask(mask, minlen = 100)
+
+#cell#
+
+sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] for roi in roilist])
+
+tissue_roilist = [get_roi_dict(cc, name='tissue', id=nn+len(roilist), sq_micron_per_pixel=sq_micron_per_pixel) 
+                      for nn,cc in enumerate(contours)]
+
+#cell#
+
+# Save both contour lists together
+
+with open(fnjson, 'w+') as fh:
+    json.dump(roilist + tissue_roilist, fh)
+
+# ### At this point we are done with basic contour extraction. It is enough for the first script 
 
 #cell#
 
@@ -498,6 +504,7 @@ img.shape
 height, width, _ = img.shape
 # objmask = get_roi_mask(co, width, height, fill=1, shape='polygon', radius=3)
 
+# # Rotating, slicing, and stitching the picture
 # ## crop and rotate the image and a chunk roi
 
 #cell#
@@ -572,7 +579,7 @@ for step in range(2):
     
     trnsf, region, chunk_slice_roi_origcoord_mag, rois_within_chunk = get_highres_roi(slide,
                                                                                    chunk_slice_contour_origcoord,
-                                                                                   regionlist,
+                                                                                   roilist,
                                                                                    angle=cr.angle
                                                                                    )
     regions.append(region)
