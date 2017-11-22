@@ -17,14 +17,6 @@ import json
 
 #cell#
 
-fnxml = "examples/6371/6371 1.xml"
-fnjson = re.sub(".xml$", ".json", fnxml)
-# fnyaml = re.sub(".xml$", ".yaml", fnxml)
-with open(fnxml) as fh:
-    soup = BeautifulSoup(fh, 'lxml')
-
-#cell#
-
 #cell#
 
 def get_ellipse_points(verticeslist, num=200):
@@ -46,6 +38,16 @@ def get_vertices(region):
     if region["type"] == '2':
         verticeslist = get_ellipse_points(np.asarray(verticeslist), num=200)
     return verticeslist
+
+# ## Read XML ROI, convert, and save as JSON
+
+#cell#
+
+fnxml = "examples/6371/6371 1.xml"
+fnjson = re.sub(".xml$", ".json", fnxml)
+# fnyaml = re.sub(".xml$", ".yaml", fnxml)
+with open(fnxml) as fh:
+    soup = BeautifulSoup(fh, 'lxml')
 
 #cell#
 
@@ -107,9 +109,7 @@ for rr in regionlist:
     plt.plot([x for x,_ in  rr["vertices"]],
              [y for _,y in  rr["vertices"]])
 
-#cell#
-
-# rr
+# # Rotating, slicing, and stitching the picture
 
 #cell#
 
@@ -132,44 +132,6 @@ def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3):
         thr = np.exp(-0.5)*img.getextrema()[1]
         mask = fill*np.asarray(np.asarray(img,)>thr, dtype='uint8')
     return mask
-
-#cell#
-
-fnsvs = "examples/6371/6371 1.svs"
-
-#cell#
-
-slide = openslide.OpenSlide(fnsvs)
-img = np.asarray(slide.associated_images["thumbnail"])
-
-#cell#
-
-slide.associated_images.keys()
-
-#cell#
-
-# slide.associated_images['label'] = None
-
-#cell#
-
-#cell#
-
-macro =  np.asarray(slide.associated_images["macro"])
-macrohsv = cv2.cvtColor(macro,  cv2.COLOR_BGR2HSV)
-# For HSV, Hue range is [0,179], Saturation range is [0,255] and Value range is [0,255]. 
-lower = np.r_[59, 250, 242]
-upper = np.r_[61, 255, 255]
-
-mask = cv2.inRange(macrohsv, lower, upper)
-_, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-contours = [np.squeeze(x) for x in contours if x.shape[0]>10]
-contour = contours[np.argmax([x.shape[0] for x in contours])]
-del contours
-len(contour)
-
-#cell#
-
-# contour
 
 #cell#
 
@@ -211,47 +173,10 @@ def map_countour_bbox(contour, slide_dimensions,
 
 #cell#
 
-# plt.figure(figsize = (18,10))
-# plt.imshow(macro[ymin:ymax, xmin:xmax])
-# # plt.imshow(macro)
-# # for co in [contour]:
-# #     plt.plot(co[:,0], co[:,1])
-
-#cell#
-
-#cell#
-
-# Image.fromarray(macro).save("macro.png")
-# cv2.imwrite("macro.png", macro)
-
-#cell#
-
-#cell#
-
-#cell#
-
-th = slide.associated_images["thumbnail"]
-th.getbbox()
-
-#cell#
-
-for kk,vv in slide.associated_images.items():
-    print(kk, vv.size)
-
-#cell#
-
-plt.imshow(img)
-
-#cell#
-
-#cell#
-
 def get_median_color(slide):
     return np.apply_over_axes(np.median, 
                               np.asarray(slide.associated_images["thumbnail"]),
                               [0,1]).ravel()
-
-median_color = get_median_color(slide)
 
 #cell#
 
@@ -289,44 +214,16 @@ def get_chunk_countours(img, color=False, filtersize=7, minlen = 100):
 #cell#
 
 def get_thumbnail_magnification(slide):
+    """get ratio of magnified / thumbnail dimension
+    assumes no isotropic scaling (indeed it is slightly anisotropic)"""
     ratio = np.asarray(slide.dimensions) / np.asarray(slide.associated_images["thumbnail"].size)
-    return ratio # np.sqrt(np.prod(ratio))
+     # np.sqrt(np.prod(ratio))
+    return ratio
 
 def roi_loc(roi):
     xmin, ymin = roi.min(0)
     xmax, ymax = roi.max(0)
     return np.r_[xmin, ymin], np.r_[xmax-xmin, ymax-ymin]
-
-#cell#
-
-#cell#
-
-#cell#
-
-mask = get_chunk_masks(img, color=False, filtersize=7)
-contours = get_contours_from_mask(mask, minlen = 100)
-
-#cell#
-
-plt.imshow(mask)
-
-#cell#
-
-#cell#
-
-plt.figure(figsize = (18,10))
-plt.imshow(img)
-for co in contours:
-    plt.plot(co[:,0], co[:,1])
-
-#cell#
-
-img.shape
-
-#cell#
-
-# objmask = np.zeros((height,width), np.uint8)
-# objmask = cv2.fillPoly(objmask, [co], 1)
 
 #cell#
 
@@ -338,7 +235,6 @@ def get_contour_centre(vertices):
 
 #cell#
 
-# cv2.moments(co)
 class CropRotateRoi():
     def __init__(self, img, co, enlarge=1.00,
                  use_offset=None, borderValue=None,
@@ -453,28 +349,6 @@ class CropRotateRoi():
 
 #cell#
 
-height, width, _ = img.shape
-# objmask = get_roi_mask(co, width, height, fill=1, shape='polygon', radius=3)
-
-#cell#
-
-# cropped, crop_contour = crop_rotate_contour(img, co)
-co = contours[2]
-# print(co[:2])
-cr = CropRotateRoi(img, co, enlarge=1.0, borderValue=median_color)
-
-crimg = cr(img, crop=False)
-crroi = cr(co)
-
-#cell#
-
-plt.figure(figsize=(15,2))
-plt.imshow(crimg)
-
-plt.plot(crroi[:,0], crroi[:,1])
-
-#cell#
-
 def plot_roi(roi, **kwargs):
     roi = np.asarray(roi)
     return plt.plot(roi[:,0], roi[:,1], **kwargs)
@@ -539,7 +413,114 @@ def get_highres_roi(slide, chunkroi_small,
     chunkroi_large_refined = chunkroi_large_refined[maxidx]
     return transform_roi_to_rotated_chunk, region_, chunkroi_large_refined, rois_within_chunk
 
+#cell#
+
+#cell#
+
+fnsvs = "examples/6371/6371 1.svs"
+
+#cell#
+
+slide = openslide.OpenSlide(fnsvs)
+img = np.asarray(slide.associated_images["thumbnail"])
+
+median_color = get_median_color(slide)
+
+#cell#
+
+slide.associated_images.keys()
+
+#cell#
+
+# Image.fromarray(macro).save("macro.png")
+# cv2.imwrite("macro.png", macro)
+
+#cell#
+
+macro =  np.asarray(slide.associated_images["macro"])
+macrohsv = cv2.cvtColor(macro,  cv2.COLOR_BGR2HSV)
+# For HSV, Hue range is [0,179], Saturation range is [0,255] and Value range is [0,255]. 
+lower = np.r_[59, 250, 242]
+upper = np.r_[61, 255, 255]
+
+mask = cv2.inRange(macrohsv, lower, upper)
+_, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+contours = [np.squeeze(x) for x in contours if x.shape[0]>10]
+contour = contours[np.argmax([x.shape[0] for x in contours])]
+del contours
+len(contour)
+
+#cell#
+
+th = slide.associated_images["thumbnail"]
+th.getbbox()
+
+#cell#
+
+for kk,vv in slide.associated_images.items():
+    print(kk, vv.size)
+
+#cell#
+
+plt.imshow(img)
+
+# ## Extract mask and contours
+
+#cell#
+
+mask = get_chunk_masks(img, color=False, filtersize=7)
+contours = get_contours_from_mask(mask, minlen = 100)
+
+#cell#
+
+plt.imshow(mask)
+
+#cell#
+
+#cell#
+
+plt.figure(figsize = (18,10))
+plt.imshow(img)
+for co in contours:
+    plt.plot(co[:,0], co[:,1])
+
+#cell#
+
+img.shape
+
+#cell#
+
+# objmask = np.zeros((height,width), np.uint8)
+# objmask = cv2.fillPoly(objmask, [co], 1)
+
+#cell#
+
+height, width, _ = img.shape
+# objmask = get_roi_mask(co, width, height, fill=1, shape='polygon', radius=3)
+
+# ## crop and rotate the image and a chunk roi
+
+#cell#
+
+# select a chunk roi
+co = contours[2]
+
+# create a transformer object
+cr = CropRotateRoi(img, co, enlarge=1.0, borderValue=median_color)
+
+# apply transformation
+crimg = cr(img, crop=False)
+crroi = cr(co)
+
+#cell#
+
+plt.figure(figsize=(15,2))
+plt.imshow(crimg)
+plt.plot(crroi[:,0], crroi[:,1])
+
 # ## Now we can slice the chunk horizonatally, and stack highres images from the slices
+# 
+# As chunks are often huge and oriented diagonally, reading the bounding box around the ROI naively would involve reading huge number of pixels most of which are blank anyways. It is often not feasible in terms of RAM.
 
 #cell#
 
@@ -553,16 +534,39 @@ print(nsteps)
 
 #cell#
 
+def get_img_bbox(img):
+    h = img.shape[0]
+    w = img.shape[1]
+    return np.c_[[0,0],[w,0],[w,h], [0,h]].T
+
+# ## Read and stitch slices
+
+#cell#
+
 ratio = get_thumbnail_magnification(slide)
-for step in range(1, nsteps):
-    currentchunk = crimg[:,stepsize*step:stepsize*(step+1),:]
-    chunk_contours = get_chunk_countours(currentchunk, 
-                               minlen = 10 , color=False,
-                               filtersize=7)
+# for step in range(nsteps):
+regions = []
+reg_rois = []
+
+chunk_height_tr_large = int(np.ceil(crimg.shape[0]*max(ratio)))
+
+tight = False
+
+for step in range(2):
+    currentchunk = crimg[:,stepsize*step:stepsize*(step+1)+1,:]
+    if tight:
+        "contour per se"
+        chunk_contours = get_chunk_countours(currentchunk, 
+                                   minlen = 10 , color=False,
+                                   filtersize=7)
+    else:
+        "compatible for stitching with other slices"
+        chunk_contours = [get_img_bbox(currentchunk)]
     slice_offset = np.r_[stepsize*step,0]
     chunk_contours += slice_offset
     assert len(chunk_contours) ==1
     chunk_contour = chunk_contours[0]
+    
     chunk_slice_contour_origcoord = np.linalg.solve(CropRotateRoi._pad_affine_matrix_(cr.affine_matrix), 
                                                     CropRotateRoi._pad_vectors_(chunk_contour).T).T[:,:2]
     
@@ -571,11 +575,30 @@ for step in range(1, nsteps):
                                                                                    regionlist,
                                                                                    angle=cr.angle
                                                                                    )
-    break
+    regions.append(region)
+    for roi_ in rois_within_chunk:
+        roi = roi_.copy()
+        roi["vertices"] += slice_offset*ratio
+        reg_rois.append(roi)
 
 #cell#
 
-# rois_within_chunk
+[rr.shape for rr in regions]
+
+#cell#
+
+fig, axs = plt.subplots(1,len(regions), figsize=(16, 8))
+for ax,reg in zip(axs, regions):
+    ax.imshow(reg)
+
+#cell#
+
+fig, axs = plt.subplots(1, figsize=(16, 8))
+
+plt.imshow(np.hstack(*[regions],))
+#.shape
+for roi in reg_rois:
+    plot_roi(roi["vertices"] )
 
 #cell#
 
