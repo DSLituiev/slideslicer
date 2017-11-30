@@ -400,7 +400,8 @@ def read_roi_patches_from_slide(slide, roilist,
     + color        -- (int, tuple(int)) color to fill in the mask
     + nchannels    -- max number of channels (set to 3 to remove 4' transparancy channel)
     
-    Returns:
+    Yields (iterator):
+    
     + img_arr
     + mask_arr
     + roi_cropped_list 
@@ -419,9 +420,6 @@ def read_roi_patches_from_slide(slide, roilist,
         for roi in checklist:
             roi['bbox'] = cv2.boundingRect(np.asarray(roi["vertices"]).round().astype(int))
             
-    img_arr = []
-    msk_arr = []
-    roi_cropped_list = []
     slide_w, slide_h = slide.dimensions
     for roi in roilist:
         if maxarea is not None and (roi['area'] > maxarea):
@@ -434,14 +432,13 @@ def read_roi_patches_from_slide(slide, roilist,
         reg = slide.read_region(start_xy,0, size_xy)
         if nchannels is not None:
             reg = np.asarray(reg)[:,:,:nchannels]
-        img_arr.append(reg)
         # Mask and main roi vertices
         if not nomask or not allcomponents:
             msk, vert = get_region_mask(roi["vertices"],
                                         start_xy, size_xy, 
                                         color=color)
-        if not nomask:
-            msk_arr.append(msk)
+        else:
+            msk = None
         if allcomponents:
             bbox = start_xy + size_xy
             sublist = []
@@ -460,18 +457,15 @@ def read_roi_patches_from_slide(slide, roilist,
                         roi["vertices"] = vert
                         roi.pop("areamicrons")
                         sublist.append(roi)
-            roi_cropped_list.append(sublist)
+            #roi_cropped_list.append(sublist)
         else:
             roi = deepcopy(roi)
             roi["vertices"] = vert
-            roi_cropped_list.append(roi)
+            sublist = [roi]
+            #roi_cropped_list.append(roi)
+        yield reg, sublist, msk
 
-    img_arr = np.stack(img_arr)
-    if not nomask:
-        msk_arr = np.stack(msk_arr)
-    else:
-        msk_arr = None
-    return img_arr, roi_cropped_list, msk_arr,
+
 
 def remove_outlier_vertices(vertices, shape):
     
