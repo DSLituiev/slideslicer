@@ -306,7 +306,7 @@ def transform_roi_to_rotated_chunk(transform_mag, rr, roi_start, roi_size,):
 
 #cell#
 
-def get_highres_roi(slide, chunkroi_small, 
+def get_rotated_highres_roi(slide, chunkroi_small, 
                     feature_rois = [],
                     color=True, filtersize=35, minlen=500,
                     median_color=None, angle=None
@@ -577,7 +577,7 @@ for step in range(2):
     chunk_slice_contour_origcoord = np.linalg.solve(CropRotateRoi._pad_affine_matrix_(cr.affine_matrix), 
                                                     CropRotateRoi._pad_vectors_(chunk_contour).T).T[:,:2]
     
-    trnsf, region, chunk_slice_roi_origcoord_mag, rois_within_chunk = get_highres_roi(slide,
+    trnsf, region, chunk_slice_roi_origcoord_mag, rois_within_chunk = get_rotated_highres_roi(slide,
                                                                                    chunk_slice_contour_origcoord,
                                                                                    roilist,
                                                                                    angle=cr.angle
