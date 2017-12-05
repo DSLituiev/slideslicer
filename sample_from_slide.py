@@ -1,10 +1,6 @@
-
 # coding: utf-8
 
 from PIL import Image
-import json
-
-
 from bs4 import BeautifulSoup
 import numpy as np
 from collections import Counter
@@ -14,7 +10,8 @@ import re
 import json
 import openslide
 import cv2
-#cell#
+from uuid import uuid1
+
 
 from extract_rois_svs_xml import extract_rois_svs_xml
 from slideutils import (plot_contour, get_median_color, get_thumbnail_magnification,
@@ -23,20 +20,24 @@ from slideutils import (plot_contour, get_median_color, get_thumbnail_magnificat
                        clip_roi_wi_bbox, sample_points_wi_contour)
 
 
-def rectangle_intersection(a,b):
-    x = max(a[0], b[0])
-    y = max(a[1], b[1])
-    w = min(a[0]+a[2], b[0]+b[2]) - x
-    h = min(a[1]+a[3], b[1]+b[3]) - y
-    if w<0 or h<0: return None
-    return (x, y, w, h)
-
 def get_img_id(svsname):
     imgid = re.sub("\.svs$","", os.path.basename(svsname)).replace(" ", "_").replace("-","_")
     return imgid
 
-def get_prefix(imgid, name, tissueid, id, parentdir = "data"):
-    prefix = "{parentdir}/{typ}/{imgid}-t{tissue}-roi{roiid}-{typ}".format(**{
+def get_prefix(imgid, name, tissueid, id, parentdir = "data", uid=False):
+    if uid not in (None, False):
+        if uid is True:
+            uid = uuid1().hex
+        prefix = '{parentdir}/{uid}-{imgid}/{typ}/{uid}-t{tissue}-roi{roiid}-{typ}'.format(**{
+                                        "tissue":tissueid,
+                                        "parentdir":parentdir,
+                                        "imgid":imgid,
+                                        "roiid":id,
+                                        "typ": (name.replace(" ","_")),
+                                        "uid":uid})
+
+    else:
+        prefix = "{parentdir}/{typ}/{imgid}-t{tissue}-roi{roiid}-{typ}".format(**{
                                         "tissue":tissueid,
                                         "parentdir":parentdir,
                                         "imgid":imgid,
@@ -136,10 +137,10 @@ def get_tissue_rois(slide,
         yield normal_tissue_only_iter
 
 
-def save_tissue_chunks(imgroiiter, imgid):
+def save_tissue_chunks(imgroiiter, imgid, uid=False):
     for ii, (reg, rois,_) in enumerate(imgroiiter):
         sumdict = summarize_rois_wi_patch(rois, bg_names = [])
-        prefix = get_prefix(imgid, sumdict["name"], sumdict["id"], ii)
+        prefix = get_prefix(imgid, sumdict["name"], sumdict["id"], ii, uid=uid)
 
         fnjson = prefix + ".json"
         fnoutpng = prefix + '.png'
@@ -154,23 +155,37 @@ def save_tissue_chunks(imgroiiter, imgid):
 
 
 if __name__ == '__main__':
+    import sys
+
     VISUALIZE = False
+    UID=True
+
+    if UID:
+        uid = uuid1().hex
 
     prms = dict(
-        target_size=[1024]*2,
+        target_side = 1024,
         maxarea = 1e7,
+        outdir = "roi-json",
+        keeplevels=3,
+
         )
 
-    fnxml = "examples/6371/6371 1.xml"
+    #fnxml = "examples/6371/6371 1.xml"
+    fnxml = sys.argv[1]
     fnsvs = re.sub(".xml$", ".svs", fnxml)
 
-    imgid = get_img_id(fnsvs)
-    outdir = "data1/"
+    outdir = "data_{}/".format(prms["target_side"])
 
+    ## setup
+    imgid = get_img_id(fnsvs)
+
+    prms["target_size"] = [prms["target_side"], prms["target_side"],]
     #os.makedirs(outdir)
 
     # ## Read XML ROI, convert, and save as JSON
-    fnjson = extract_rois_svs_xml(fnxml)
+    fnjson = extract_rois_svs_xml(fnxml, outdir=prms["outdir"],
+                                  keeplevels=prms["keeplevels"])
 
     with open(fnjson,'r') as fh:
         roilist = json.load(fh)
@@ -216,7 +231,7 @@ if __name__ == '__main__':
         print(mask.max())
 
     #############################
-    print("reading targeted rois")
+    print("READING TARGETED ROIS")
 
     imgroiiter = read_roi_patches_from_slide(slide, roilist,
                             target_size = prms["target_size"],
@@ -225,12 +240,12 @@ if __name__ == '__main__':
                             allcomponents=True,
                            )
 
-    print("reading and saving smaller rois (glomeruli, inflammation loci etc.)")
+    print("READING AND SAVING SMALLER ROIS (GLOMERULI, INFLAMMATION LOCI ETC.)")
 
     for reg, rois,_ in imgroiiter:
         sumdict = summarize_rois_wi_patch(rois, bg_names = ["tissue"])
         prefix = get_prefix(imgid, sumdict["name"], sumdict["tissue_id"],
-                            sumdict["id"], parentdir=outdir)
+                            sumdict["id"], parentdir=outdir, uid=uid)
         fnjson = prefix + ".json"
         fnoutpng = prefix + '.png'
         print(fnoutpng)
@@ -243,7 +258,7 @@ if __name__ == '__main__':
             Image.fromarray(reg).save(fnoutpng)
 
 
-    print("reading and saving _featureless_ / normal tissue")
+    print("READING AND SAVING _FEATURELESS_ / NORMAL TISSUE")
     for tissue_chunk_iter in get_tissue_rois(slide,
                                             roilist,
                                             vis = False,
@@ -253,4 +268,4 @@ if __name__ == '__main__':
                                             random=False,
                                            ):
             # save
-            save_tissue_chunks(tissue_chunk_iter, imgid)
+            save_tissue_chunks(tissue_chunk_iter, imgid, uid=uid)

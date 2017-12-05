@@ -12,7 +12,6 @@ import openslide
 from PIL import Image, ImageDraw
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
 
 # see https://github.com/bgilbert/anonymize-slide
 def get_ellipse_points(verticeslist, num=200):
@@ -267,13 +266,6 @@ class CropRotateRoi():
             return out
 
 #cell#
-
-def plot_contour(roi, ax=None, **kwargs):
-    roi = np.asarray(roi)
-    if ax is None:
-        ax = plt
-    return ax.plot(roi[:,0], roi[:,1], **kwargs)
-
 
 def within_roi(vertices, roi_start, roi_size,):
     left = (vertices>=roi_start).all(0).all()
@@ -553,4 +545,13 @@ def sample_points_wi_contour(contour,
     # clip
     points = points[flag_points]#[inds,:]
     return points
+
+
+def plot_contour(roi, ax=None, **kwargs):
+    from matplotlib import pyplot as plt
+    roi = np.asarray(roi)
+    if ax is None:
+        ax = plt
+    return ax.plot(roi[:,0], roi[:,1], **kwargs)
+
 

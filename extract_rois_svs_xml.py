@@ -1,5 +1,6 @@
 
 # coding: utf-8
+import os
 import sys
 import re
 import json
@@ -18,9 +19,23 @@ from slideutils import (get_vertices, get_roi_dict, get_median_color,
 ## Read XML ROI, convert, and save as JSON
 
 
-def extract_rois_svs_xml(fnxml):
+def extract_rois_svs_xml(fnxml, outdir=None, keeplevels=1):
+    """
+    extract and save rois
+
+    Inputs:
+    fnxml      -- xml path
+    outdir     -- (optional); save into an alternative directory
+    keeplevels -- number of path elements to keep 
+                  when saving to provided `outdir`
+                  (1 -- filename only; 2 -- incl 1 directory)
+    """
     fnsvs = re.sub("\.xml$", ".svs", fnxml)
     fnjson = re.sub(".xml$", ".json", fnxml)
+    if outdir is not None and os.path.isdir(outdir):
+        fnjson = fnjson.split('/')[-keeplevels]
+        fnjson = os.path.join(outdir, fnjson)
+        os.makedirs(os.path.dirname(fnjson), exist_ok = True)
 
     with open(fnxml) as fh:
         soup = BeautifulSoup(fh, 'lxml')
@@ -53,8 +68,8 @@ def extract_rois_svs_xml(fnxml):
     print("counts of roi names")
     print(roi_name_counts)
 
-    with open(fnjson, 'w+') as fh:
-        json.dump(roilist, fh)
+    #with open(fnjson, 'w+') as fh:
+    #    json.dump(roilist, fh)
 
 
     ## Extract tissue chunk ROIs
