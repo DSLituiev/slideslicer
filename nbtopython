@@ -1,0 +1,7 @@
+set -e
+infile=$1
+jupyter-nbconvert --to python $infile
+pyfile="${infile%.ipynb}.py"
+
+cat $pyfile | sed '/^$/N;/^\n$/D' | sed "s/^# In\[[ 0-9]*\]:/#cell#/"  > "${pyfile}.tmp"
+mv "${pyfile}.tmp" "${pyfile}"

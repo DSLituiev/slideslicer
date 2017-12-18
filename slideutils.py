@@ -458,7 +458,6 @@ def read_roi_patches_from_slide(slide, roilist,
         yield reg, sublist, msk
 
 
-
 def remove_outlier_vertices(vertices, shape):
     
     shape = np.asarray(shape[:2])
