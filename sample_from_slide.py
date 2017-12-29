@@ -137,10 +137,10 @@ def get_tissue_rois(slide,
         yield normal_tissue_only_iter
 
 
-def save_tissue_chunks(imgroiiter, imgid, uid=False):
+def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data"):
     for ii, (reg, rois,_) in enumerate(imgroiiter):
         sumdict = summarize_rois_wi_patch(rois, bg_names = [])
-        prefix = get_prefix(imgid, sumdict["name"], sumdict["id"], ii, uid=uid)
+        prefix = get_prefix(imgid, sumdict["name"], sumdict["id"], ii, uid=uid, parentdir=parentdir)
 
         fnjson = prefix + ".json"
         fnoutpng = prefix + '.png'
@@ -158,15 +158,17 @@ if __name__ == '__main__':
     import sys
 
     VISUALIZE = False
-    UID=True
+    UID=False
 
     if UID:
         uid = uuid1().hex
+    else:
+        uid=False
 
     prms = dict(
         target_side = 1024,
         maxarea = 1e7,
-        outdir = "roi-json",
+        jsondir = "roi-json",
         keeplevels=3,
 
         )
@@ -184,7 +186,7 @@ if __name__ == '__main__':
     #os.makedirs(outdir)
 
     # ## Read XML ROI, convert, and save as JSON
-    fnjson = extract_rois_svs_xml(fnxml, outdir=prms["outdir"],
+    fnjson = extract_rois_svs_xml(fnxml, outdir=prms["jsondir"],
                                   keeplevels=prms["keeplevels"])
 
     with open(fnjson,'r') as fh:
@@ -268,4 +270,4 @@ if __name__ == '__main__':
                                             random=False,
                                            ):
             # save
-            save_tissue_chunks(tissue_chunk_iter, imgid, uid=uid)
+            save_tissue_chunks(tissue_chunk_iter, imgid, uid=uid, parentdir=outdir)
