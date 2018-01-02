@@ -156,38 +156,75 @@ def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data"):
 
 if __name__ == '__main__':
     import sys
+    import argparse
+    
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+      '--data-dir',
+      type=str,
+      default='data',
+      help='The directory where the input data will be stored.')
+
+    parser.add_argument(
+      '--json-dir',
+      type=str,
+      default='roi-json',
+      help='The directory where the roi JSON files will be stored.')
+
+    parser.add_argument(
+      '--target-side',
+      type=int,
+      default=1024,
+      help='The directory where the input data will be stored.')
+
+    parser.add_argument(
+      '--max-area',
+      type=float,
+      default=1e7,
+      help='maximal area of a roi')
+
+    parser.add_argument(
+      'fnxml',
+      type=str,
+      help='The XML file for ROI.')
+
+    parser.add_argument(
+      '--uid',
+      action='store_true',
+      default=False,
+      help='generate uid.')
+
+    parser.add_argument(
+      '--keep-levels',
+      type=int,
+      default=3,
+      help='.')
+
+    prms = parser.parse_args()
     VISUALIZE = False
-    UID=False
 
-    if UID:
+    if prms.uid:
         uid = uuid1().hex
     else:
         uid=False
 
-    prms = dict(
-        target_side = 1024,
-        maxarea = 1e7,
-        jsondir = "roi-json",
-        keeplevels=3,
-
-        )
 
     #fnxml = "examples/6371/6371 1.xml"
-    fnxml = sys.argv[1]
-    fnsvs = re.sub(".xml$", ".svs", fnxml)
+    #fnxml = sys.argv[1]
+    fnsvs = re.sub(".xml$", ".svs", prms.fnxml)
 
-    outdir = "data_{}/".format(prms["target_side"])
+    outdir = "data_{}/".format(prms.target_side)
 
     ## setup
     imgid = get_img_id(fnsvs)
 
-    prms["target_size"] = [prms["target_side"], prms["target_side"],]
+    target_size = [prms.target_side, prms.target_side,]
     #os.makedirs(outdir)
 
     # ## Read XML ROI, convert, and save as JSON
-    fnjson = extract_rois_svs_xml(fnxml, outdir=prms["jsondir"],
-                                  keeplevels=prms["keeplevels"])
+    fnjson = extract_rois_svs_xml(prms.fnxml, outdir=prms.json_dir,
+                                  keeplevels=prms.keep_levels)
 
     with open(fnjson,'r') as fh:
         roilist = json.load(fh)
@@ -236,8 +273,8 @@ if __name__ == '__main__':
     print("READING TARGETED ROIS")
 
     imgroiiter = read_roi_patches_from_slide(slide, roilist,
-                            target_size = prms["target_size"],
-                            maxarea = prms["maxarea"],
+                            target_size = target_size,
+                            maxarea = prms.max_area,
                             nchannels=3,
                             allcomponents=True,
                            )
