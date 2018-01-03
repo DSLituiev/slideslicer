@@ -11,13 +11,15 @@ import json
 import openslide
 import cv2
 from uuid import uuid1
-
+from pycocotools.mask import encode, decode
 
 from extract_rois_svs_xml import extract_rois_svs_xml
 from slideutils import (plot_contour, get_median_color, 
                         get_thumbnail_magnification,
                         get_img_bbox, get_rotated_highres_roi,
-                        get_uniform_tiles, get_chunk_masks, 
+                        get_uniform_tiles, 
+                        get_chunk_masks, 
+                        get_roi_mask,
                         get_contours_from_mask,
                         CropRotateRoi,
                        get_contour_centre, read_roi_patches_from_slide,
@@ -164,10 +166,6 @@ def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data",
 
         rois = add_roi_bytes(rois, np.asarray(reg), lower=lower, upper=upper)
         with open(fn_json, 'w+') as fhj: json.dump(rois, fhj)
-
-from pycocotools.mask import encode, decode
-from slideutils import get_roi_mask
-    
     
 def add_roi_bytes(rois, reg,
                   lower = [0, 0, 180], upper = [179, 25, 255]):
@@ -208,9 +206,49 @@ def add_roi_bytes(rois, reg,
         cocomask["counts"] = cocomask["counts"].decode('utf-8')
         roi_.update(cocomask)
         if isinstance(roi_["vertices"], np.ndarray):
-            roi_["vertices"] = roi_["vertices"].tolist()
-            
+            roi_["vertices"] = roi_["vertices"].tolist()   
     return rois
+
+
+def construct_dense_mask(rois, tissuedict):
+    """constructs a dense mask given a list of `rois` 
+    and a dictionary mapping roi names to channel
+    numbers in tissuedict are expected to start at one
+    as the default class is constructed 
+    and assigned to zeroth channel
+    
+    Calls `pycocotools.mask.decode`
+    """
+    nchannels = 1+max(tissuedict.values())
+    maskarr = np.zeros(rois[-1]["size"] + [nchannels], dtype=bool)
+    
+    for roi_ in rois:
+        mask = decode(roi_)
+        name = roi_["name"]
+        if name in tissuedict:
+            channel = tissuedict[name]
+            maskarr[..., channel] |= mask.astype(bool)
+    maskarr[..., 0] = ~maskarr.any(-1)
+    assert maskarr.sum(-1).max() == 1
+    return maskarr
+
+
+def construct_sparse_mask(rois, tissuedict):
+    nchannels = 1+max(tissuedict.values())
+    maskarr = np.zeros(rois[-1]["size"], dtype=bool)
+    
+    for roi_ in rois:
+        mask = decode(roi_)
+        name = roi_["name"]
+        if name in tissuedict:
+            channel = tissuedict[name]
+            maskarr = np.maximum(maskarr, channel*mask.astype(np.uint8))
+    return maskarr
+
+
+def dense_to_sparse(maskarr):
+    return (np.arange(maskarr.shape[-1]).reshape([1,1,-1]) *
+            maskarr).sum(-1)
 
 
 if __name__ == '__main__':
