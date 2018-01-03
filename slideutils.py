@@ -34,17 +34,17 @@ def get_vertices(region):
 
 # ## functions for rotating, slicing, and stitching the picture
 
-def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3):
+def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C'):
     img = Image.new('L', (width, height), 0)
     if len(roi)>1 and shape=='polygon':# roi.shape[0]>1:
         roi = [tuple(x) for x in roi]
         ImageDraw.Draw(img).polygon(roi, outline=fill, fill=fill)
-        mask = np.asarray(img, dtype='uint8')
+        mask = np.asarray(img, dtype='uint8', order=order)
     else:
         ImageDraw.Draw(img).point(roi, fill=255)
         img = img.filter(ImageFilter.GaussianBlur(radius=radius))
         thr = np.exp(-0.5)*img.getextrema()[1]
-        mask = fill*np.asarray(np.asarray(img,)>thr, dtype='uint8')
+        mask = fill*np.asarray(np.asarray(img,)>thr, dtype='uint8', order=order)
     return mask
 
 
@@ -105,11 +105,12 @@ def get_median_color(slide):
 
 def get_chunk_masks(img, color=False, filtersize=7,
                    lower = [0, 0, 180],
-                   upper = [179, 20, 255]):
-    
+                   upper = [179, 20, 255],
+				 close=True, dtype='uint8'):
+
     kernel = (filtersize,filtersize)
     if color:
-        # For HSV, Hue range is [0,179], Saturation range is [0,255] and Value range is [0,255]. 
+        # For HSV, Hue range is [0,179], Saturation range is [0,255] and Value range is [0,255].
         imghsv = cv2.cvtColor(img,  cv2.COLOR_BGR2HSV)
         imghsv[:,:,-1] = cv2.GaussianBlur(imghsv[:,:,-1],kernel,0)
         imghsv[:,:,1] = cv2.GaussianBlur(imghsv[:,:,1],kernel,0)
@@ -120,7 +121,17 @@ def get_chunk_masks(img, color=False, filtersize=7,
         imgavg = np.mean(img, axis=-1).astype('uint8')
         blur = cv2.GaussianBlur(imgavg,kernel,0)
         ret3, mask = cv2.threshold(blur,0,1,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    return (~mask.astype(bool)).astype('uint8')
+
+    if close:
+        kernel = np.zeros((filtersize,filtersize), np.uint8)
+        kernel = cv2.circle(kernel, (filtersize//2, filtersize//2),
+                            filtersize//2, 1, thickness=-1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        
+    mask = (~mask.astype(bool))
+    if dtype not in (bool, 'bool'):
+        mask = mask.astype('uint8')
+    return mask
 
 def get_contours_from_mask(mask, minlen = 50):
     im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)

@@ -14,8 +14,12 @@ from uuid import uuid1
 
 
 from extract_rois_svs_xml import extract_rois_svs_xml
-from slideutils import (plot_contour, get_median_color, get_thumbnail_magnification,
-        CropRotateRoi, get_img_bbox, get_rotated_highres_roi, get_uniform_tiles,
+from slideutils import (plot_contour, get_median_color, 
+                        get_thumbnail_magnification,
+                        get_img_bbox, get_rotated_highres_roi,
+                        get_uniform_tiles, get_chunk_masks, 
+                        get_contours_from_mask,
+                        CropRotateRoi,
                        get_contour_centre, read_roi_patches_from_slide,
                        clip_roi_wi_bbox, sample_points_wi_contour)
 
@@ -76,7 +80,10 @@ def summarize_rois_wi_patch(rois, bg_names = ["tissue"]):
     else:
         name = '+'.join(areasum.index.tolist())
         id = '+'.join(areasum["id"].astype(str).tolist())
-    return {"name":name, "id": str(id), "tissue_id": tissue_id, "stats": dfareas.to_dict(orient='records')}
+    return {"name":name,
+            "id": str(id),
+            "tissue_id": tissue_id,
+            "stats": dfareas.to_dict(orient='records')}
 
 
 # Rewrite for generator if needed:
@@ -142,22 +149,66 @@ def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data"):
         sumdict = summarize_rois_wi_patch(rois, bg_names = [])
         prefix = get_prefix(imgid, sumdict["name"], sumdict["id"], ii, uid=uid, parentdir=parentdir)
 
-        fnjson = prefix + ".json"
+        fn_summary_json = prefix + "-summary.json"
+        fn_json = prefix + ".json"
         fnoutpng = prefix + '.png'
         print(fnoutpng)
 
-        os.makedirs(os.path.dirname(fnjson), exist_ok=True)
-        with open(fnjson, 'w+') as fhj: json.dump( sumdict, fhj)
+        os.makedirs(os.path.dirname(fn_summary_json), exist_ok=True)
+        with open(fn_summary_json, 'w+') as fhj: json.dump(sumdict, fhj)
         if isinstance(reg, Image.Image):
             reg.save(fnoutpng)
         else:
             Image.fromarray(reg).save(fnoutpng)
 
+        rois = add_roi_bytes(rois, np.asarray(reg))
+        with open(fn_json, 'w+') as fhj: json.dump(rois, fhj)
+
+from pycocotools.mask import encode, decode
+from slideutils import get_roi_mask
+    
+    
+def add_roi_bytes(rois, reg):
+    rois = rois.copy()
+    tissue_roi = None
+    other_mask_ = 0
+    
+    for roi_ in rois:
+        if roi_["name"] == "tissue":
+            tissue_roi = roi_
+            continue
+        mask_ = get_roi_mask(roi_["vertices"], reg.shape[1], reg.shape[0], fill=1, order='F')
+        cocomask = encode(np.asarray(mask_, dtype='uint8'))
+        cocomask["counts"] = cocomask["counts"].decode('utf-8')
+        roi_.update(cocomask)
+        if isinstance(roi_["vertices"], np.ndarray):
+            roi_["vertices"] = roi_["vertices"].tolist()
+        other_mask_ = np.maximum(other_mask_, mask_)
+    
+    for roi_ in [tissue_roi]:
+        if reg is not None:
+            mask_ = get_chunk_masks(reg, color=True, filtersize=25, dtype=bool,
+                                    lower = [0, 0, 180], upper = [179, 25, 255])
+            verts = get_contours_from_mask(mask_.astype('uint8'), minlen = 25)
+            roi_["vertices"] = verts[np.argmax(map(len,verts))]
+            mask_ = np.asarray(mask_, order='F')
+        else:
+            mask_ = get_roi_mask(roi_["vertices"], reg.shape[1], reg.shape[0], 
+                                 fill=1, order='F')
+        if isinstance(other_mask_, np.ndarray):
+            mask_ = mask_.astype(bool) & ~other_mask_.astype(bool)
+        cocomask = encode(np.asarray(mask_, dtype='uint8'))
+        cocomask["counts"] = cocomask["counts"].decode('utf-8')
+        roi_.update(cocomask)
+        if isinstance(roi_["vertices"], np.ndarray):
+            roi_["vertices"] = roi_["vertices"].tolist()
+            
+    return rois
+
 
 if __name__ == '__main__':
     import sys
     import argparse
-    
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -210,7 +261,7 @@ if __name__ == '__main__':
         uid=False
 
 
-    #fnxml = "examples/6371/6371 1.xml"
+    #fnxml = "../data/raw/70bb3032750d09e7549928c0dbf79afc30d7cb68.xml"
     #fnxml = sys.argv[1]
     fnsvs = re.sub(".xml$", ".svs", prms.fnxml)
 
@@ -285,7 +336,8 @@ if __name__ == '__main__':
         sumdict = summarize_rois_wi_patch(rois, bg_names = ["tissue"])
         prefix = get_prefix(imgid, sumdict["name"], sumdict["tissue_id"],
                             sumdict["id"], parentdir=outdir, uid=uid)
-        fnjson = prefix + ".json"
+        fn_summary_json = prefix + "-summary.json"
+        fn_json = prefix + ".json"
         fnoutpng = prefix + '.png'
         print(fnoutpng)
         os.makedirs(os.path.dirname(fnjson), exist_ok=True)
@@ -295,7 +347,11 @@ if __name__ == '__main__':
             reg.save(fnoutpng)
         else:
             Image.fromarray(reg).save(fnoutpng)
-
+        
+        rois = add_roi_bytes(rois, reg)
+        mask_ = decode(rois[-1]).astype(bool)
+        # plt.imshow(mask_ )
+        with open(fn_json, 'w+') as fhj: json.dump( rois, fhj)
 
     print("READING AND SAVING _FEATURELESS_ / NORMAL TISSUE")
     for tissue_chunk_iter in get_tissue_rois(slide,
