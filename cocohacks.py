@@ -3,6 +3,16 @@ import numpy as np
 import json
 from pycocotools.mask import encode, decode
 
+def remove_upper_channel(lo, hi):
+    """
+
+    # RULE
+    lo )  0 0 1 1
+    up )  0 1 0 1
+     ->   0 0 1 0
+    """
+    return (lo & np.bitwise_xor(lo, hi))
+
 def construct_dense_mask(rois, tissuedict):
     """constructs a dense mask given a list of `rois`
     and a dictionary mapping roi names to channel
@@ -21,7 +31,13 @@ def construct_dense_mask(rois, tissuedict):
         if name in tissuedict:
             channel = tissuedict[name]
             maskarr[..., channel] |= mask.astype(bool)
-    maskarr[..., 0] = ~maskarr.any(-1)
+    for nn in range(maskarr.shape[-1]-2, -1, -1):
+        maskarr[..., nn] =  remove_upper_channel(
+                                                maskarr[..., nn],
+                                                maskarr[...,nn:].any(-1)
+                                                )
+
+    # maskarr[..., 0] = ~maskarr.any(-1)
     assert maskarr.sum(-1).max() == 1
     return maskarr
 
