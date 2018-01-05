@@ -11,6 +11,8 @@ def remove_upper_channel(lo, hi):
     up )  0 1 0 1
      ->   0 0 1 0
     """
+    lo = lo.astype(bool)
+    hi = hi.astype(bool)
     return (lo & np.bitwise_xor(lo, hi))
 
 def construct_dense_mask(rois, tissuedict):
@@ -31,14 +33,18 @@ def construct_dense_mask(rois, tissuedict):
         if name in tissuedict:
             channel = tissuedict[name]
             maskarr[..., channel] |= mask.astype(bool)
-    for nn in range(maskarr.shape[-1]-2, -1, -1):
+
+    for nn in range(maskarr.shape[-1]-2, 0, -1):
         maskarr[..., nn] =  remove_upper_channel(
                                                 maskarr[..., nn],
                                                 maskarr[...,nn:].any(-1)
                                                 )
 
-    # maskarr[..., 0] = ~maskarr.any(-1)
-    assert maskarr.sum(-1).max() == 1
+    maskarr[..., 0] = ~maskarr.any(-1)
+    if not  maskarr.sum(-1).max() == 1:
+        print("maskarr.sum(-1).max()", maskarr.sum(-1).max())
+        raise ValueError()
+
     return maskarr
 
 
