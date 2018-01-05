@@ -5,7 +5,6 @@ from pycocotools.mask import encode, decode
 
 def remove_upper_channel(lo, hi):
     """
-
     # RULE
     lo )  0 0 1 1
     up )  0 1 0 1
@@ -13,7 +12,8 @@ def remove_upper_channel(lo, hi):
     """
     lo = lo.astype(bool)
     hi = hi.astype(bool)
-    return (lo & np.bitwise_xor(lo, hi))
+    return (lo ^ (lo & hi).astype(bool)).astype(bool)
+
 
 def construct_dense_mask(rois, tissuedict):
     """constructs a dense mask given a list of `rois`
@@ -34,12 +34,13 @@ def construct_dense_mask(rois, tissuedict):
             channel = tissuedict[name]
             maskarr[..., channel] |= mask.astype(bool)
 
+    """
     for nn in range(maskarr.shape[-1]-2, 0, -1):
         maskarr[..., nn] =  remove_upper_channel(
                                                 maskarr[..., nn],
                                                 maskarr[...,nn:].any(-1)
                                                 )
-
+    """
     maskarr[..., 0] = ~maskarr.any(-1)
     if not  maskarr.sum(-1).max() == 1:
         print("maskarr.sum(-1).max()", maskarr.sum(-1).max())
