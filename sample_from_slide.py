@@ -134,7 +134,7 @@ def get_tissue_rois(slide,
                                         target_size = target_size,
                                         maxarea = maxarea,
                                         color=1,
-                                        nchannels=None,
+                                        nchannels=3,
                                         allcomponents = True,
                                         nomask=True,
                                        )
@@ -152,13 +152,13 @@ def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data",
         sumdict = summarize_rois_wi_patch(rois, bg_names = [])
         prefix = get_prefix(imgid, sumdict["name"], sumdict["id"], ii, uid=uid, parentdir=parentdir)
 
-        fn_summary_json = prefix + "-summary.json"
+        #fn_summary_json = prefix + "-summary.json"
         fn_json = prefix + ".json"
         fnoutpng = prefix + '.png'
         print(fnoutpng)
 
-        os.makedirs(os.path.dirname(fn_summary_json), exist_ok=True)
-        with open(fn_summary_json, 'w+') as fhj: json.dump(sumdict, fhj)
+        os.makedirs(os.path.dirname(fn_json), exist_ok=True)
+        #with open(fn_summary_json, 'w+') as fhj: json.dump(sumdict, fhj)
         if isinstance(reg, Image.Image):
             reg.save(fnoutpng)
         else:
@@ -218,15 +218,15 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-      '--data-dir',
+      '--data-root',
       type=str,
-      default='data',
+      default='../data',
       help='The directory where the input data will be stored.')
 
     parser.add_argument(
       '--json-dir',
       type=str,
-      default='roi-json',
+      default='../data/roi-json',
       help='The directory where the roi JSON files will be stored.')
 
     parser.add_argument(
@@ -273,7 +273,7 @@ if __name__ == '__main__':
     #fnxml = sys.argv[1]
     fnsvs = re.sub(".xml$", ".svs", prms.fnxml)
 
-    outdir = "data_{}/".format(prms.target_side)
+    outdir = os.path.join(prms.data_root, "data_{}/".format(prms.target_side))
 
     ## setup
     imgid = get_img_id(fnsvs)
@@ -344,13 +344,13 @@ if __name__ == '__main__':
         sumdict = summarize_rois_wi_patch(rois, bg_names = ["tissue"])
         prefix = get_prefix(imgid, sumdict["name"], sumdict["tissue_id"],
                             sumdict["id"], parentdir=outdir, uid=uid)
-        fn_summary_json = prefix + "-summary.json"
+        #fn_summary_json = prefix + "-summary.json"
         fn_json = prefix + ".json"
         fnoutpng = prefix + '.png'
         print(fnoutpng)
-        os.makedirs(os.path.dirname(fnjson), exist_ok=True)
+        os.makedirs(os.path.dirname(fn_json), exist_ok=True)
         
-        with open(fnjson, 'w+') as fhj: json.dump(sumdict, fhj)
+        #with open(fn_summary_json, 'w+') as fhj: json.dump(sumdict, fhj)
         if isinstance(reg, Image.Image):
             reg.save(fnoutpng)
         else:
