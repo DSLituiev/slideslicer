@@ -33,15 +33,14 @@ def construct_dense_mask(rois, tissuedict):
         if name in tissuedict:
             channel = tissuedict[name]
             maskarr[..., channel] |= mask.astype(bool)
-
-    """
+ 
     for nn in range(maskarr.shape[-1]-2, 0, -1):
         maskarr[..., nn] =  remove_upper_channel(
                                                 maskarr[..., nn],
-                                                maskarr[...,nn:].any(-1)
+                                                maskarr[...,nn+1:].any(-1)
                                                 )
-    """
-    maskarr[..., 0] = ~maskarr.any(-1)
+    maskarr[..., 0] = ~maskarr[...,1:].any(-1)
+
     if not  maskarr.sum(-1).max() == 1:
         print("maskarr.sum(-1).max()", maskarr.sum(-1).max())
         raise ValueError()
