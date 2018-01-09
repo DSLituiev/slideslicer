@@ -59,7 +59,9 @@ def subsample_verts(verts, factor):
 def subsample_roi(fn, fnout):
     with open(fn) as fh:
         rois = json.load(fh)
-    roi = rois[0]
+
+    if len(rois) == 0:
+        print("NO ROIS IN\t%s" % fn)
 
     for roi in rois:
         mask = decode(roi)
