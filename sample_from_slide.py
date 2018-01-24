@@ -147,7 +147,12 @@ def get_tissue_rois(slide,
 
 
 def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data",
-                       lower = [0, 0, 180], upper = [179, 25, 255]):
+                       lower = [0, 0, 180],
+                       upper = [179, 10, 255],
+                       close=50,
+                       open_=30,
+                       filtersize = 20,
+                       ):
     for ii, (reg, rois,_) in enumerate(imgroiiter):
         sumdict = summarize_rois_wi_patch(rois, bg_names = [])
         prefix = get_prefix(imgid, sumdict["name"], sumdict["id"], ii, uid=uid, parentdir=parentdir)
@@ -164,13 +169,22 @@ def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data",
         else:
             Image.fromarray(reg).save(fnoutpng)
 
-        rois = add_roi_bytes(rois, np.asarray(reg), lower=lower, upper=upper)
+        rois = add_roi_bytes(rois, np.asarray(reg),
+                lower=lower, upper=upper,
+                open=open_, close=close,
+                filtersize=filtersize)
         with open(fn_json, 'w+') as fhj: json.dump(rois, fhj)
 
 
 def add_roi_bytes(rois, reg,
                   lower = [0, 0, 180],
-                  upper = [179, 25, 255]):
+                  upper = [179, 25, 255],
+                  filtersize=25,
+                  close=True,
+                  open=False,
+                  minlen = -1):
+    if minlen==-1:
+        minlen=filtersize
     rois = rois.copy()
     tissue_roi = None
     other_mask_ = 0
@@ -180,6 +194,7 @@ def add_roi_bytes(rois, reg,
             tissue_roi = roi_
             continue
         mask_ = get_roi_mask(roi_["vertices"], reg.shape[1], reg.shape[0], fill=1, order='F')
+
         cocomask = encode(np.asarray(mask_, dtype='uint8'))
         cocomask["counts"] = cocomask["counts"].decode('utf-8')
         roi_.update(cocomask)
@@ -189,9 +204,13 @@ def add_roi_bytes(rois, reg,
     
     for roi_ in [tissue_roi]:
         if reg is not None:
-            mask_ = get_chunk_masks(reg, color=True, filtersize=25, dtype=bool,
+            mask_ = get_chunk_masks(reg, color=True, filtersize=filtersize, dtype=bool,
+                                    open=open, close=close,
                                     lower = lower, upper = upper)
-            verts = get_contours_from_mask(mask_.astype('uint8'), minlen = 25)
+            if mask_.sum()==0:
+                roi_ = None
+                continue
+            verts = get_contours_from_mask(mask_.astype('uint8'), minlen=minlen)
             # print("verts", len(verts))
             if len(verts)>0:
                 roi_["vertices"] = verts[np.argmax(map(len,verts))]
@@ -202,6 +221,9 @@ def add_roi_bytes(rois, reg,
         else:
             mask_ = get_roi_mask(roi_["vertices"], reg.shape[1], reg.shape[0], 
                                  fill=1, order='F')
+            if mask_.sum()==0:
+                roi_ = None
+                continue
         if isinstance(other_mask_, np.ndarray):
             mask_ = mask_.astype(bool) & ~other_mask_.astype(bool)
         cocomask = encode(np.asarray(mask_, dtype='uint8'))
@@ -209,6 +231,7 @@ def add_roi_bytes(rois, reg,
         roi_.update(cocomask)
         if isinstance(roi_["vertices"], np.ndarray):
             roi_["vertices"] = roi_["vertices"].tolist()   
+
     return rois
 
 
@@ -267,13 +290,16 @@ if __name__ == '__main__':
         uid=False
 
     lower = [0, 0, 180]
-    upper = [179, 15, 255]
+    upper = [179, 10, 255]
+    close=50
+    open_=30
+    filtersize = 20
 
     #fnxml = "../data/raw/70bb3032750d09e7549928c0dbf79afc30d7cb68.xml"
     #fnxml = sys.argv[1]
     fnsvs = re.sub(".xml$", ".svs", prms.fnxml)
 
-    outdir = os.path.join(prms.data_root, "data_{}/".format(prms.target_side))
+    outdir = os.path.join(prms.data_root, "data_{}/fullsplit".format(prms.target_side))
 
     ## setup
     imgid = get_img_id(fnsvs)
@@ -356,7 +382,10 @@ if __name__ == '__main__':
         else:
             Image.fromarray(reg).save(fnoutpng)
         
-        rois = add_roi_bytes(rois, reg, lower=lower, upper=upper)
+        rois = add_roi_bytes(rois, reg, lower=lower, upper=upper,
+                             close=close,
+                             open=open_,
+                             filtersize = filtersize)
         # mask_ = decode(rois[-1]).astype(bool)
         # plt.imshow(mask_ )
         with open(fn_json, 'w+') as fhj: json.dump( rois, fhj)
@@ -371,4 +400,7 @@ if __name__ == '__main__':
                                             random=False,
                                            ):
             # save
-            save_tissue_chunks(tissue_chunk_iter, imgid, uid=uid, parentdir=outdir)
+            save_tissue_chunks(tissue_chunk_iter, imgid, uid=uid, parentdir=outdir,
+                               close=close,
+                               open_=open_,
+                               filtersize = filtersize)

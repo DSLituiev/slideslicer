@@ -106,8 +106,11 @@ def get_median_color(slide):
 def get_chunk_masks(img, color=False, filtersize=7,
                    lower = [0, 0, 180],
                    upper = [179, 20, 255],
-				 close=True, dtype='uint8'):
+                     close=True,
+                     open=False,
+                     dtype='uint8'):
 
+    filtersize = filtersize if filtersize % 2 == 1 else filtersize+1
     kernel = (filtersize,filtersize)
     if color:
         # For HSV, Hue range is [0,179], Saturation range is [0,255] and Value range is [0,255].
@@ -122,12 +125,26 @@ def get_chunk_masks(img, color=False, filtersize=7,
         blur = cv2.GaussianBlur(imgavg,kernel,0)
         ret3, mask = cv2.threshold(blur,0,1,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
 
+    if open:
+        if isinstance(open, int) and not isinstance(open, bool):
+            fsopen = open
+        else:
+            fsopen = filtersize
+        kernel = np.zeros((fsopen,fsopen), np.uint8)
+        kernel = cv2.circle(kernel, (fsopen//2, fsopen//2),
+                            fsopen//2, 1, thickness=-1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
     if close:
-        kernel = np.zeros((filtersize,filtersize), np.uint8)
-        kernel = cv2.circle(kernel, (filtersize//2, filtersize//2),
-                            filtersize//2, 1, thickness=-1)
+        if isinstance(close, int) and not isinstance(close, bool):
+            fsclose = close
+        else:
+            fsclose = filtersize
+        kernel = np.zeros((fsclose, fsclose), np.uint8)
+        kernel = cv2.circle(kernel, (fsclose//2, fsclose//2),
+                            fsclose//2, 1, thickness=-1)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        
+
     mask = (~mask.astype(bool))
     if dtype not in (bool, 'bool'):
         mask = mask.astype('uint8')
