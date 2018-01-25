@@ -30,24 +30,13 @@ def get_img_id(svsname):
     imgid = re.sub("\.svs$","", os.path.basename(svsname)).replace(" ", "_").replace("-","_")
     return imgid
 
-def get_prefix(imgid, name, tissueid, id, parentdir = "data", uid=False):
-    if uid not in (None, False):
-        if uid is True:
-            uid = uuid1().hex
-        prefix = '{parentdir}/{uid}-{imgid}/{typ}/{uid}-t{tissue}-roi{roiid}-{typ}'.format(**{
+def get_prefix(imgid, pos, name, tissueid, id, parentdir = "data"):
+    prefix = "{parentdir}/{typ}/{imgid}-{pos}-t{tissue}-r{roiid}-{typ}".format(**{
                                         "tissue":tissueid,
+                                        "pos": "x{}-y{}".format(*pos),
                                         "parentdir":parentdir,
                                         "imgid":imgid,
                                         "roiid":id,
-                                        "typ": (name.replace(" ","_")),
-                                        "uid":uid})
-
-    else:
-        prefix = "{parentdir}/{typ}/{imgid}-t{tissue}-roi{roiid}-{typ}".format(**{
-                                        "tissue":tissueid,
-                                        "parentdir":parentdir,
-                                        "imgid":imgid,
-                                        "roiid":id, 
                                         "typ": (name.replace(" ","_"))})
     return prefix
 
@@ -148,9 +137,10 @@ def get_tissue_rois(slide,
 
 def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data",
                        lower = [0, 0, 180], upper = [179, 25, 255]):
-    for ii, (reg, rois,_) in enumerate(imgroiiter):
+    for ii, (reg, rois,_, start_xy) in enumerate(imgroiiter):
         sumdict = summarize_rois_wi_patch(rois, bg_names = [])
-        prefix = get_prefix(imgid, sumdict["name"], sumdict["id"], ii, uid=uid, parentdir=parentdir)
+        prefix = get_prefix(imgid, start_xy, sumdict["name"], sumdict["id"], ii,
+                            parentdir=parentdir)
 
         #fn_summary_json = prefix + "-summary.json"
         fn_json = prefix + ".json"
@@ -340,10 +330,10 @@ if __name__ == '__main__':
 
     print("READING AND SAVING SMALLER ROIS (GLOMERULI, INFLAMMATION LOCI ETC.)")
 
-    for reg, rois,_ in imgroiiter:
+    for reg, rois,_, start_xy in imgroiiter:
         sumdict = summarize_rois_wi_patch(rois, bg_names = ["tissue"])
-        prefix = get_prefix(imgid, sumdict["name"], sumdict["tissue_id"],
-                            sumdict["id"], parentdir=outdir, uid=uid)
+        prefix = get_prefix(imgid, start_xy, sumdict["name"], sumdict["tissue_id"],
+                            sumdict["id"], parentdir=outdir)
         #fn_summary_json = prefix + "-summary.json"
         fn_json = prefix + ".json"
         fnoutpng = prefix + '.png'

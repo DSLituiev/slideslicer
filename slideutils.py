@@ -432,7 +432,7 @@ def read_roi_patches_from_slide(slide, roilist,
         y = min(slide_h - target_size[0], max(0, yc - target_size[0]//2))
         start_xy = (x,y)
         size_xy = (target_size[1],target_size[0])
-        reg = slide.read_region(start_xy,0, size_xy)
+        reg = slide.read_region(start_xy, 0, size_xy)
         if nchannels is not None:
             reg = np.asarray(reg)[:,:,:nchannels]
         # Mask and main roi vertices
@@ -466,7 +466,7 @@ def read_roi_patches_from_slide(slide, roilist,
             roi["vertices"] = vert
             sublist = [roi]
             #roi_cropped_list.append(roi)
-        yield reg, sublist, msk
+        yield reg, sublist, msk, start_xy
 
 
 def remove_outlier_vertices(vertices, shape):
