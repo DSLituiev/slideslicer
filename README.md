@@ -23,6 +23,9 @@ these MS-COCO JSON masks can be converted to one-hot [ height x width x classes]
     # download SVS file and sample patches from it
     pull_n_chop.sh
 
+    # link inflammation vs everything else classes
+    link_binary_infl_norm.sh
+
     # subsample if needed
     DATADIR="../data/......."
     subsample.py $DATADIR

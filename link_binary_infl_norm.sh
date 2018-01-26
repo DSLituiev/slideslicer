@@ -2,8 +2,10 @@
 
 # LINK images for binary classification (inflammation / normal)
 #INDIR=~/data_1024/fullsplit
-INDIR=../data/data_1024/fullsplit
-OUTDIR=../data/data_1024/infl_split/all
+BASE=$1
+#BASE=../data/data_1024
+INDIR=$BASE/fullsplit
+OUTDIR=$BASE/infl_split/all
 echo -e "linking from\t$INDIR"
 echo -e "linking to\t$OUTDIR"
 mkdir -p $INDIR
