@@ -11,6 +11,7 @@ from collections import Counter
 from bs4 import BeautifulSoup
 #import cv2
 import numpy as np
+from shapely.geometry import Polygon
 
 from slideutils import (get_vertices, get_roi_dict, get_median_color,
                         get_chunk_masks, get_contours_from_mask,
@@ -18,15 +19,55 @@ from slideutils import (get_vertices, get_roi_dict, get_median_color,
 
 ## Read XML ROI, convert, and save as JSON
 
+def _shapely_polygon_from_roi_(roi):
+    return Polygon(roi["vertices"])
 
-def extract_rois_svs_xml(fnxml, outdir=None, keeplevels=1):
+
+def find_chunk_content(roilist):
+    """finds features (gloms, infl, etc) contained within tissue chunks.
+    Returns a dictionary:
+    {tissue_chunk_1_id: [feature_1_id, ..., feature_n_id],
+     tissue_chunk_1_id: [...]
+    }
+    Requires `shapely` package
+    """
+    pgs_tissue = {}
+    pgs_feature = {}
+    for roi in roilist:
+        if roi["name"]=="tissue":
+            pgs_tissue[roi['id']] = Polygon(roi["vertices"])
+        else:
+            pgs_feature[roi['id']] = Polygon(roi["vertices"])
+
+    tissue_contains = dict(zip(pgs_tissue.keys(), [[] for _ in range(len(pgs_tissue))]))
+    remove_items = []
+    for idt, pt in pgs_tissue.items():
+        for idf in remove_items:
+            pgs_feature.pop(idf)
+        remove_items = []
+        for idf, pf in pgs_feature.items():
+            if pt.intersects(pf):
+                remove_items.append(idf)
+                tissue_contains[idt].append(idf)
+    return tissue_contains
+
+
+def remove_empty_tissue_chunks(roilist):
+    """removes tissue chunks that contain no annotation contours within"""
+    chunk_content = find_chunk_content(roilist)
+    empty_chunks = set([kk for kk,vv in chunk_content.items() if len(vv)==0])
+    return [roi for roi in roilist if roi['id'] not in empty_chunks]
+
+
+def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, keeplevels=1):
     """
     extract and save rois
 
     Inputs:
-    fnxml      -- xml path
-    outdir     -- (optional); save into an alternative directory
-    keeplevels -- number of path elements to keep 
+    fnxml         -- xml path
+    remove_empty  -- remove empty chunks of tissue
+    outdir        -- (optional); save into an alternative directory
+    keeplevels    -- number of path elements to keep 
                   when saving to provided `outdir`
                   (1 -- filename only; 2 -- incl 1 directory)
     """
@@ -87,12 +128,15 @@ def extract_rois_svs_xml(fnxml, outdir=None, keeplevels=1):
 
     sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] for roi in roilist])
 
-    tissue_roilist = [get_roi_dict(cc*ratio, name='tissue', id=nn+len(roilist), sq_micron_per_pixel=sq_micron_per_pixel) 
+    tissue_roilist = [get_roi_dict(cc*ratio, name='tissue', id=1+nn+len(roilist), sq_micron_per_pixel=sq_micron_per_pixel) 
                           for nn,cc in enumerate(contours)]
 
+    roilist = roilist + tissue_roilist
+    if remove_empty:
+        roilist = remove_empty_tissue_chunks(roilist)
     ## Save both contour lists together
     with open(fnjson, 'w+') as fh:
-        json.dump(roilist + tissue_roilist, fh)
+        json.dump(roilist, fh)
 
     return fnjson
 
