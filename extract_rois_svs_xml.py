@@ -59,7 +59,7 @@ def remove_empty_tissue_chunks(roilist):
     return [roi for roi in roilist if roi['id'] not in empty_chunks]
 
 
-def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, keeplevels=1):
+def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, minlen=50, keeplevels=1):
     """
     extract and save rois
 
@@ -67,6 +67,7 @@ def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, keeplevels=1):
     fnxml         -- xml path
     remove_empty  -- remove empty chunks of tissue
     outdir        -- (optional); save into an alternative directory
+    minlen        -- minimal length of tissue chunk contour in thumbnail image
     keeplevels    -- number of path elements to keep 
                   when saving to provided `outdir`
                   (1 -- filename only; 2 -- incl 1 directory)
@@ -105,9 +106,6 @@ def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, keeplevels=1):
     # for an ellipse, 
     #    area = $\pi \times r \times R$
 
-    roi_name_counts = pd.Series([rr["name"] for rr in roilist]).value_counts()
-    print("counts of roi names")
-    print(roi_name_counts)
 
     #with open(fnjson, 'w+') as fh:
     #    json.dump(roilist, fh)
@@ -122,7 +120,7 @@ def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, keeplevels=1):
 
     ## Extract mask and contours
     mask = get_chunk_masks(img, color=False, filtersize=7)
-    contours = get_contours_from_mask(mask, minlen = 100)
+    contours = get_contours_from_mask(mask, minlen = minlen)
 
     ratio = get_thumbnail_magnification(slide)
 
@@ -132,8 +130,16 @@ def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, keeplevels=1):
                           for nn,cc in enumerate(contours)]
 
     roilist = roilist + tissue_roilist
+
+    roi_name_counts = pd.Series([rr["name"] for rr in roilist]).value_counts()
+    print("counts of roi names")
+    print(roi_name_counts)
+
     if remove_empty:
         roilist = remove_empty_tissue_chunks(roilist)
+        roi_name_counts = pd.Series([rr["name"] for rr in roilist]).value_counts()
+        print("counts of roi names after removing empty chunks")
+        print(roi_name_counts)
     ## Save both contour lists together
     with open(fnjson, 'w+') as fh:
         json.dump(roilist, fh)

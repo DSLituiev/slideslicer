@@ -193,12 +193,15 @@ def add_roi_bytes(rois, reg,
         other_mask_ = np.maximum(other_mask_, mask_)
     
     for roi_ in [tissue_roi]:
+        if roi_ is None:
+            print("Someting strange is going on. Make sure no tissue chunks are missing")
         if reg is not None:
             mask_ = get_chunk_masks(reg, color=True, filtersize=filtersize, dtype=bool,
                                     open=open, close=close,
                                     lower = lower, upper = upper)
             if mask_.sum()==0:
                 roi_ = None
+                print("skipping empty mask", roi_['name'], roi_['id'])
                 continue
             verts = get_contours_from_mask(mask_.astype('uint8'), minlen=minlen)
             # print("verts", len(verts))
