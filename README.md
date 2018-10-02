@@ -6,17 +6,17 @@ install cocotools
 ## Input data
 
 the input data comes as
- (1) raw Aperio SVS images and 
- (2) ROI outlines stored as XML files.
+ 1. raw Aperio SVS images and 
+ 2. ROI outlines stored as XML files.
 
 the challenge is that SVS files are of huge size (~ 3e4 x 5e4),
 while the tissue occupies less than a quarter of that area.
 
 the set of scripts has been created to 
- (1) sample tissue and specific tissue features and
- (2) convert ROI outlines to masks and manipulate the masks.
+ 1. sample tissue and specific tissue features and
+ 2. convert ROI outlines to masks and manipulate the masks.
 
-The masks can be efficiently stored in MS-COCO format. 
+The masks can be efficiently stored in run-length encoding MS-COCO format. 
 This format dramatically compresses binary masks allowing to
 store them in JSON files, preserving original label in free text form.
 
@@ -26,6 +26,9 @@ These MS-COCO JSON masks can be converted to one-hot [ height x width x classes]
 
     # download SVS file from Google Cloud Storage and sample patches from it
     pull_n_chop.sh
+
+    # link inflammation vs everything else classes
+    link_binary_infl_norm.sh
 
     # subsample if needed
     DATADIR="../data/......."

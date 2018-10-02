@@ -3,27 +3,29 @@
 # LINK images for binary classification (inflammation / normal)
 #INDIR=~/data_1024/fullsplit
 BASE=$1
+TAG=glom
 #BASE=../data/data_1024
 INDIR=$BASE/fullsplit/all
-OUTDIR=$BASE/infl_split/all
+OUTDIR=$BASE/glom_split/all
 echo -e "linking from\t$INDIR"
 echo -e "linking to\t$OUTDIR"
+mkdir -p $INDIR
 # mv ~/data_1024/* $INDIR
 mkdir -p $OUTDIR
-mkdir -p $OUTDIR/infl
+mkdir -p $OUTDIR/glom
 mkdir -p $OUTDIR/normal
 
 # link inflammation patches
 #ln -s $INDIR/*infl*/*png $OUTDIR/infl
 
-find $INDIR/*infl*/*png  -exec sh -c 'ln -s $(readlink -f $1) '$OUTDIR/infl'' _ {} \;
+find $INDIR/*$TAG*/*png  -exec sh -c 'ln -s $(readlink -f $1) '$OUTDIR/$TAG'' _ {} \;
 
 
 # link everything else
 dirs=$(ls $INDIR)
 for dd in ${dirs[@]}
 do
-    if [[ $dd == *"infl"* ]]; then
+    if [[ $dd == *"$TAG"* ]]; then
 #         echo "$dd"
         continue
     else
