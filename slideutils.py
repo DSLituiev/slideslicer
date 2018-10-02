@@ -574,11 +574,16 @@ def sample_points_wi_contour(contour,
     return points
 
 
-def plot_contour(roi, ax=None, **kwargs):
+def plot_contour(roi, ax=None, name = None, fontsize=12, **kwargs):
     from matplotlib import pyplot as plt
     roi = np.asarray(roi)
     if ax is None:
         ax = plt
-    return ax.plot(roi[:,0], roi[:,1], **kwargs)
+    line = ax.plot(roi[:,0], roi[:,1], **kwargs)[0]
+    if name is not None:
+        c = line.get_color()
+        ind = np.argmax(roi[:,0])
+        ax.text(roi[ind,0], roi[ind,1], name, fontsize=fontsize, color=c)
+    return line
 
 

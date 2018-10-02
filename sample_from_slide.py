@@ -142,7 +142,7 @@ def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data",
                        open_=30,
                        filtersize = 20,
                        ):
-    for ii, (reg, rois,_, start_xy) in enumerate(imgroiiter):
+    for ii, (reg, rois, _, start_xy) in enumerate(imgroiiter):
         sumdict = summarize_rois_wi_patch(rois, bg_names = [])
         prefix = get_prefix(imgid, start_xy, sumdict["name"], sumdict["id"], ii,
                             parentdir=parentdir)
@@ -193,12 +193,15 @@ def add_roi_bytes(rois, reg,
         other_mask_ = np.maximum(other_mask_, mask_)
     
     for roi_ in [tissue_roi]:
+        if roi_ is None:
+            print("Someting strange is going on. Make sure no tissue chunks are missing")
         if reg is not None:
             mask_ = get_chunk_masks(reg, color=True, filtersize=filtersize, dtype=bool,
                                     open=open, close=close,
                                     lower = lower, upper = upper)
             if mask_.sum()==0:
                 roi_ = None
+                print("skipping empty mask", roi_['name'], roi_['id'])
                 continue
             verts = get_contours_from_mask(mask_.astype('uint8'), minlen=minlen)
             # print("verts", len(verts))
@@ -241,6 +244,12 @@ if __name__ == '__main__':
       type=str,
       default='../data/roi-json',
       help='The directory where the roi JSON files will be stored.')
+
+    parser.add_argument(
+      '--keep-empty',
+      action='store_true',
+      default=False,
+      help='keep empty tissue chunks (with no annotations within)')
 
     parser.add_argument(
       '--target-side',
@@ -299,6 +308,7 @@ if __name__ == '__main__':
 
     # ## Read XML ROI, convert, and save as JSON
     fnjson = extract_rois_svs_xml(prms.fnxml, outdir=prms.json_dir,
+                                  remove_empty = ~prms.keep_empty,
                                   keeplevels=prms.keep_levels)
 
     with open(fnjson,'r') as fh:
@@ -324,6 +334,7 @@ if __name__ == '__main__':
                      'scler glom': 'm',
                      'infl':'r',
                      'tissue':'w',
+                     'other tissue':'y',
                      'art':'olive',
                      'fold':'y'}
 
