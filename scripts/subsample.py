@@ -1,10 +1,13 @@
-import os, sys
+import os
+import sys
+import json
+import numpy as np
 from PIL import Image
+from pycocotools.mask import encode, decode
 
 original_side= 1024
 side = 512 //2 
 size = side, side
-
 
 factor = original_side // side
 
@@ -25,13 +28,6 @@ def filegen(indir, ext='png'):
             if not ff.name.endswith(ext):
                 continue
             yield ff.path
-
-
-
-from pycocotools.mask import encode, decode
-import json
-from PIL import Image
-import numpy as np
 
 
 
