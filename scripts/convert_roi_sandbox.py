@@ -361,38 +361,39 @@ def get_roi_dict(contour, name='tissue', id=0, sq_micron_per_pixel=None):
 # ## Read XML ROI, convert, and save as JSON
 
 #cell#
+if __name__ == '__main__':
 
-fnxml = "examples/6371/6371 1.xml"
-fnjson = re.sub(".xml$", ".json", fnxml)
+    fnxml = "examples/6371/6371 1.xml"
+    fnjson = re.sub(".xml$", ".json", fnxml)
 # fnyaml = re.sub(".xml$", ".yaml", fnxml)
-with open(fnxml) as fh:
-    soup = BeautifulSoup(fh, 'lxml')
+    with open(fnxml) as fh:
+        soup = BeautifulSoup(fh, 'lxml')
 
 #cell#
 
-regions = soup.find_all("region")
+    regions = soup.find_all("region")
 
 #cell#
 
-roilist = []
-for rr in regions:
+    roilist = []
+    for rr in regions:
 #     name = rr.get("text").lower().rstrip('.')
-    attrs_ = rr.attrs.copy()
-    if ("text" in attrs_) and not ("name" in attrs_):
-        attrs_["name"] = attrs_.pop("text").lower().rstrip('.')
-    for kk,vv in attrs_.items():
-        if isinstance(vv,str) and vv.isdigit():
-            attrs_[kk] = int(vv)
-        else:
-            try:
-                attrs_[kk] = float(vv)
-            except:
-                if attrs_[kk]=='':
-                    attrs_[kk]=None
-                continue
-    attrs_["vertices"] = get_vertices(rr)
+        attrs_ = rr.attrs.copy()
+        if ("text" in attrs_) and not ("name" in attrs_):
+            attrs_["name"] = attrs_.pop("text").lower().rstrip('.')
+        for kk,vv in attrs_.items():
+            if isinstance(vv,str) and vv.isdigit():
+                attrs_[kk] = int(vv)
+            else:
+                try:
+                    attrs_[kk] = float(vv)
+                except:
+                    if attrs_[kk]=='':
+                        attrs_[kk]=None
+                    continue
+        attrs_["vertices"] = get_vertices(rr)
 #     dict(name=name, vertices = get_vertices(rr))
-    roilist.append(attrs_)
+        roilist.append(attrs_)
 
 # for an ellipse, 
 # 
@@ -405,12 +406,12 @@ for rr in regions:
 
 #cell#
 
-pd.Series([rr["name"] for rr in roilist]).value_counts()
+    pd.Series([rr["name"] for rr in roilist]).value_counts()
 
 #cell#
 
-with open(fnjson, 'w+') as fh:
-    json.dump(roilist, fh)
+    with open(fnjson, 'w+') as fh:
+        json.dump(roilist, fh)
 
 #cell#
 
@@ -419,80 +420,80 @@ with open(fnjson, 'w+') as fh:
 
 #cell#
 
-from matplotlib import pyplot as plt
-get_ipython().magic('matplotlib inline')
+    from matplotlib import pyplot as plt
+    get_ipython().magic('matplotlib inline')
 
 #cell#
 
-for rr in roilist:
-    plt.plot([x for x,_ in  rr["vertices"]],
-             [y for _,y in  rr["vertices"]])
+    for rr in roilist:
+        plt.plot([x for x,_ in  rr["vertices"]],
+                 [y for _,y in  rr["vertices"]])
 
 # ## Extract tissue chunk ROIs
 
 #cell#
 
-fnsvs = "examples/6371/6371 1.svs"
+    fnsvs = "examples/6371/6371 1.svs"
 
 #cell#
 
-slide = openslide.OpenSlide(fnsvs)
-img = np.asarray(slide.associated_images["thumbnail"])
+    slide = openslide.OpenSlide(fnsvs)
+    img = np.asarray(slide.associated_images["thumbnail"])
 
-median_color = get_median_color(slide)
-
-#cell#
-
-slide.associated_images.keys()
+    median_color = get_median_color(slide)
 
 #cell#
 
-for kk,vv in slide.associated_images.items():
-    print(kk, vv.size)
+    slide.associated_images.keys()
 
 #cell#
 
-plt.imshow(img)
+    for kk,vv in slide.associated_images.items():
+        print(kk, vv.size)
+
+#cell#
+
+    plt.imshow(img)
 
 # ## Extract mask and contours
 
 #cell#
 
-mask = get_chunk_masks(img, color=False, filtersize=7)
-contours = get_contours_from_mask(mask, minlen = 100)
+    mask = get_chunk_masks(img, color=False, filtersize=7)
+    contours = get_contours_from_mask(mask, minlen = 100)
 
 #cell#
 
-sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] for roi in roilist])
+    sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] for roi in roilist])
 
-tissue_roilist = [get_roi_dict(cc, name='tissue', id=nn+len(roilist), sq_micron_per_pixel=sq_micron_per_pixel) 
-                      for nn,cc in enumerate(contours)]
+    tissue_roilist = [get_roi_dict(cc, name='tissue', id=nn+len(roilist), sq_micron_per_pixel=sq_micron_per_pixel) 
+                          for nn,cc in enumerate(contours)]
 
 #cell#
 
 # Save both contour lists together
 
-with open(fnjson, 'w+') as fh:
-    json.dump(roilist + tissue_roilist, fh)
+    with open(fnjson, 'w+') as fh:
+        json.dump(roilist + tissue_roilist, fh)
 
 # ### At this point we are done with basic contour extraction. It is enough for the first script 
 
 #cell#
 
-plt.imshow(mask)
+    plt.imshow(mask)
 
 #cell#
 
 #cell#
 
-plt.figure(figsize = (18,10))
-plt.imshow(img)
-for co in contours:
-    plt.plot(co[:,0], co[:,1])
+    plt.figure(figsize = (18,10))
+    plt.imshow(img)
+    for co in contours:
+        plt.plot(co[:,0], co[:,1])
 
 #cell#
 
-img.shape
+    img.shape
 
 #cell#
 
@@ -501,7 +502,7 @@ img.shape
 
 #cell#
 
-height, width, _ = img.shape
+    height, width, _ = img.shape
 # objmask = get_roi_mask(co, width, height, fill=1, shape='polygon', radius=3)
 
 # # Rotating, slicing, and stitching the picture
@@ -510,20 +511,20 @@ height, width, _ = img.shape
 #cell#
 
 # select a chunk roi
-co = contours[2]
+    co = contours[2]
 
 # create a transformer object
-cr = CropRotateRoi(img, co, enlarge=1.0, borderValue=median_color)
+    cr = CropRotateRoi(img, co, enlarge=1.0, borderValue=median_color)
 
 # apply transformation
-crimg = cr(img, crop=False)
-crroi = cr(co)
+    crimg = cr(img, crop=False)
+    crroi = cr(co)
 
 #cell#
 
-plt.figure(figsize=(15,2))
-plt.imshow(crimg)
-plt.plot(crroi[:,0], crroi[:,1])
+    plt.figure(figsize=(15,2))
+    plt.imshow(crimg)
+    plt.plot(crroi[:,0], crroi[:,1])
 
 # ## Now we can slice the chunk horizonatally, and stack highres images from the slices
 # 
@@ -531,91 +532,91 @@ plt.plot(crroi[:,0], crroi[:,1])
 
 #cell#
 
-np.ceil(crimg.shape[1]/int(np.ceil(crimg.shape[1]/100)))
+    np.ceil(crimg.shape[1]/int(np.ceil(crimg.shape[1]/100)))
 
 #cell#
 
-stepsize = 100
-nsteps = int(np.ceil(crimg.shape[1]/stepsize))
-print(nsteps)
+    stepsize = 100
+    nsteps = int(np.ceil(crimg.shape[1]/stepsize))
+    print(nsteps)
 
 #cell#
 
-def get_img_bbox(img):
-    h = img.shape[0]
-    w = img.shape[1]
-    return np.c_[[0,0],[w,0],[w,h], [0,h]].T
+    def get_img_bbox(img):
+        h = img.shape[0]
+        w = img.shape[1]
+        return np.c_[[0,0],[w,0],[w,h], [0,h]].T
 
 # ## Read and stitch slices
 
 #cell#
 
-ratio = get_thumbnail_magnification(slide)
+    ratio = get_thumbnail_magnification(slide)
 # for step in range(nsteps):
-regions = []
-reg_rois = []
+    regions = []
+    reg_rois = []
 
-chunk_height_tr_large = int(np.ceil(crimg.shape[0]*max(ratio)))
+    chunk_height_tr_large = int(np.ceil(crimg.shape[0]*max(ratio)))
 
-tight = False
+    tight = False
 
-for step in range(2):
-    currentchunk = crimg[:,stepsize*step:stepsize*(step+1)+1,:]
-    if tight:
-        "contour per se"
-        chunk_contours = get_chunk_countours(currentchunk, 
-                                   minlen = 10 , color=False,
-                                   filtersize=7)
-    else:
-        "compatible for stitching with other slices"
-        chunk_contours = [get_img_bbox(currentchunk)]
-    slice_offset = np.r_[stepsize*step,0]
-    chunk_contours += slice_offset
-    assert len(chunk_contours) ==1
-    chunk_contour = chunk_contours[0]
-    
-    chunk_slice_contour_origcoord = np.linalg.solve(CropRotateRoi._pad_affine_matrix_(cr.affine_matrix), 
-                                                    CropRotateRoi._pad_vectors_(chunk_contour).T).T[:,:2]
-    
-    trnsf, region, chunk_slice_roi_origcoord_mag, rois_within_chunk = get_rotated_highres_roi(slide,
-                                                                                   chunk_slice_contour_origcoord,
-                                                                                   roilist,
-                                                                                   angle=cr.angle
-                                                                                   )
-    regions.append(region)
-    for roi_ in rois_within_chunk:
-        roi = roi_.copy()
-        roi["vertices"] += slice_offset*ratio
-        reg_rois.append(roi)
-
-#cell#
-
-[rr.shape for rr in regions]
+    for step in range(2):
+        currentchunk = crimg[:,stepsize*step:stepsize*(step+1)+1,:]
+        if tight:
+            "contour per se"
+            chunk_contours = get_chunk_countours(currentchunk, 
+                                       minlen = 10 , color=False,
+                                       filtersize=7)
+        else:
+            "compatible for stitching with other slices"
+            chunk_contours = [get_img_bbox(currentchunk)]
+        slice_offset = np.r_[stepsize*step,0]
+        chunk_contours += slice_offset
+        assert len(chunk_contours) ==1
+        chunk_contour = chunk_contours[0]
+        
+        chunk_slice_contour_origcoord = np.linalg.solve(CropRotateRoi._pad_affine_matrix_(cr.affine_matrix), 
+                                                        CropRotateRoi._pad_vectors_(chunk_contour).T).T[:,:2]
+        
+        trnsf, region, chunk_slice_roi_origcoord_mag, rois_within_chunk = get_rotated_highres_roi(slide,
+                                                                                       chunk_slice_contour_origcoord,
+                                                                                       roilist,
+                                                                                       angle=cr.angle
+                                                                                       )
+        regions.append(region)
+        for roi_ in rois_within_chunk:
+            roi = roi_.copy()
+            roi["vertices"] += slice_offset*ratio
+            reg_rois.append(roi)
 
 #cell#
 
-fig, axs = plt.subplots(1,len(regions), figsize=(16, 8))
-for ax,reg in zip(axs, regions):
-    ax.imshow(reg)
+    [rr.shape for rr in regions]
 
 #cell#
 
-fig, axs = plt.subplots(1, figsize=(16, 8))
+    fig, axs = plt.subplots(1,len(regions), figsize=(16, 8))
+    for ax,reg in zip(axs, regions):
+        ax.imshow(reg)
 
-plt.imshow(np.hstack(*[regions],))
+#cell#
+
+    fig, axs = plt.subplots(1, figsize=(16, 8))
+
+    plt.imshow(np.hstack(*[regions],))
 #.shape
-for roi in reg_rois:
-    plot_roi(roi["vertices"] )
+    for roi in reg_rois:
+        plot_roi(roi["vertices"] )
 
 #cell#
 
-plt.imshow(img)
-plot_roi( chunk_slice_contour_origcoord )
+    plt.imshow(img)
+    plot_roi( chunk_slice_contour_origcoord )
 
 #cell#
 
-plt.imshow(currentchunk)
-plot_roi(chunk_contour-slice_offset)
+    plt.imshow(currentchunk)
+    plot_roi(chunk_contour-slice_offset)
 
 #cell#
 
@@ -623,9 +624,9 @@ plot_roi(chunk_contour-slice_offset)
 
 #cell#
 
-plt.imshow(region)
-plot_roi(chunk_slice_roi_origcoord_mag)
-for rr in rois_within_chunk:
-    plot_roi(rr["vertices"])
+    plt.imshow(region)
+    plot_roi(chunk_slice_roi_origcoord_mag)
+    for rr in rois_within_chunk:
+        plot_roi(rr["vertices"])
 
 #cell#

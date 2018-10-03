@@ -1,10 +1,12 @@
 
 # coding: utf-8
+import sys
 from bs4 import BeautifulSoup
 import numpy as np
 from collections import Counter
 from itertools import product
 from copy import deepcopy
+from functools import reduce
 import pandas as pd
 import re
 import json
@@ -12,6 +14,81 @@ import openslide
 from PIL import Image, ImageDraw
 import cv2
 import numpy as np
+from shapely.geometry import Polygon, MultiPolygon, MultiLineString, LineString
+
+
+def clean_polygon(pp):
+    coords = np.asarray(pp.boundary.coords)
+    danglingpiece = np.asarray(pp.buffer(0).boundary.coords)
+    negmask = reduce(lambda x,y: x|y, ((coords == row).all(1) for row in danglingpiece))
+    pp = Polygon(coords[~negmask])
+    return pp.buffer(0)
+
+def resolve_selfintersection(pp, areathr=1e-3, fraction=5, depth = 0):
+    pbuf = pp.buffer(0)#.interiors
+    areadiff = abs(pp.area- pbuf.area)/pp.area
+#     print("areadiff", areadiff)
+        
+    if (areadiff > areathr):
+        pp = clean_polygon(pp)
+        pp = resolve_selfintersection(pp, areathr=1e-3, fraction=3, depth=depth+1)
+        #assert len(pp.boundary.coords)>0, "zero-area polygon supplied!"
+        #vertices = np.asarray(pp.boundary)
+        ##print("shape", vertices.shape[0], len(vertices))
+        #assert len(vertices.shape)>0, "zero-shape vertices"
+        #if depth > max(fraction, 1/fraction):
+        #    break_point = 1
+        #elif depth < vertices.shape[0]:
+        #    break_point = int(vertices.shape[0]/fraction)
+        #    break_point = break_point if break_point <len(vertices) else len(vertices)-2
+        #    print("break_point", break_point)
+        #else:
+        #    raise RuntimeError("recursion is too deep")
+        #for ii in range(10):
+        #    pp = _permute_vertices_(vertices, break_point=break_point)
+        #    try:
+        #        #printi
+        #        ("output shape", np.asarray(pp.boundary).shape[0])
+        #        break
+        #    except:
+        #        pass
+        ##pp = _permute_polygon_(pp, fraction=fraction, break_point=break_point)
+        #pp = resolve_selfintersection(pp, areathr=1e-3, fraction=3, depth=depth+1)
+    else:
+        try:
+            pp = Polygon(pbuf)
+        except NotImplementedError as ee:
+            print(ee)
+            ind = np.argmax([x.area for x in pbuf])
+            return pbuf[ind]
+        
+    assert pp.is_valid
+    return pp
+
+def _permute_vertices_(vertices, fraction=3, break_point=None):
+    if break_point is None:
+        if fraction>1:
+            fraction = 1/fraction
+        break_point = int(vertices.shape[0]*fraction)
+    
+
+    pp = Polygon(np.flipud(np.vstack([vertices[break_point:],
+                                      vertices[:break_point]])))
+    return pp
+
+def _permute_polygon_(pp, fraction=3, break_point=None):
+    vertices = np.asarray(pp.boundary)
+    del pp
+    if break_point is None:
+        if fraction>1:
+            fraction = 1/fraction
+        break_point = int(vertices.shape[0]*fraction)
+    
+    break_point = break_point if break_point <len(vertices) else len(vertices)-2
+
+    pp = Polygon(np.flipud(np.vstack([vertices[break_point:],
+                                      vertices[:break_point]])))
+    return pp
 
 # see https://github.com/bgilbert/anonymize-slide
 def get_ellipse_points(verticeslist, num=200):
@@ -35,6 +112,9 @@ def get_vertices(region):
 # ## functions for rotating, slicing, and stitching the picture
 
 def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C'):
+    """
+    get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C')
+    """
     img = Image.new('L', (width, height), 0)
     if len(roi)>1 and shape=='polygon':# roi.shape[0]>1:
         roi = [tuple(x) for x in roi]
@@ -405,6 +485,7 @@ def read_roi_patches_from_slide(slide, roilist,
                         target_size = [1024]*2,
                         maxarea = 1e7,
                         color=1,
+                        magnlevel = 0,
                         nchannels=None,
                         allcomponents = False,
                         nomask=False,
@@ -440,6 +521,9 @@ def read_roi_patches_from_slide(slide, roilist,
         for roi in checklist:
             roi['bbox'] = cv2.boundingRect(np.asarray(roi["vertices"]).round().astype(int))
             
+    magnification = 4**-magnlevel
+    size_xy = (target_size[1],target_size[0])
+    size_xy_magn = (int(target_size[1] * magnification), int(target_size[0]*magnification))
     slide_w, slide_h = slide.dimensions
     for roi in roilist:
         if maxarea is not None and (roi['area'] > maxarea):
@@ -448,8 +532,7 @@ def read_roi_patches_from_slide(slide, roilist,
         x = min(slide_w - target_size[1], max(0, xc - target_size[1]//2))
         y = min(slide_h - target_size[0], max(0, yc - target_size[0]//2))
         start_xy = (x,y)
-        size_xy = (target_size[1],target_size[0])
-        reg = slide.read_region(start_xy, 0, size_xy)
+        reg = slide.read_region(start_xy, magnlevel, size_xy_magn)
         if nchannels is not None:
             reg = np.asarray(reg)[:,:,:nchannels]
         # Mask and main roi vertices
@@ -463,12 +546,18 @@ def read_roi_patches_from_slide(slide, roilist,
             bbox = start_xy + size_xy
             sublist = []
             for roi in checklist:
-                #print(roi['id'], 'roi["bbox"]', roi["bbox"])
+                print("clipping", roi['id'], roi['name'], 'bbox', roi["bbox"])
                 #print(len(roi["vertices"]))
                 vert = clip_roi_wi_bbox(bbox,
                                         roi["vertices"],
                                         roi["bbox"]) 
                 if vert is not None:
+                    if len(vert) ==0:
+                        print('no vertices found', "skipping", roi['name'], roi['id'], 
+                              file=sys.stderr, sep='\t')
+                        continue
+                    print('adding', roi['name'], roi['id'], file=sys.stderr, sep='\t')
+                    vert = (np.asarray(vert) * magnification).astype(int)
                     area = cv2.contourArea(vert)
                     if area>0.0:
                         roi = deepcopy(roi)
@@ -480,6 +569,7 @@ def read_roi_patches_from_slide(slide, roilist,
             #roi_cropped_list.append(sublist)
         else:
             roi = deepcopy(roi)
+            vert = (np.asarray(vert) * magnification).astype(int)
             roi["vertices"] = vert
             sublist = [roi]
             #roi_cropped_list.append(roi)
@@ -487,15 +577,47 @@ def read_roi_patches_from_slide(slide, roilist,
 
 
 def remove_outlier_vertices(vertices, shape):
-    
     shape = np.asarray(shape[:2])
+    rectangle = Polygon(np.asarray([[0,0],
+                                    [shape[0], 0],
+                                    shape,
+                                    [0, shape[1]]
+                                    ]))
     vertices = vertices.copy()
-#     print((vertices<0).any())
-    vertices[vertices<0] = 0
-    shape_yx = np.flipud(shape)
-    for nn in range(len(shape)):
-        vertices[vertices[:,nn]>shape_yx[nn], nn] = shape_yx[nn]
-    return vertices.astype(int)
+    roi_polygon = Polygon(np.asarray(vertices))
+    roi_polygon = resolve_selfintersection(roi_polygon)
+    intersection_ = rectangle.intersection(roi_polygon)
+    
+    if not isinstance(intersection_, Polygon):
+        if len(intersection_) == 0:
+            return []
+        print("""multiple pieces after intersection
+using the largest piece
+""")
+        intersection_ = intersection_[np.argmax([x.area for x in intersection_])]
+    if isinstance(intersection_.boundary, MultiLineString):
+        print("""multiple boundary segments after intersection
+{}
+using the largest segment
+""".format(str([len(x.coords) for x in intersection_.boundary])))
+        #print(intersection_.boundary[0])
+        boundary = intersection_.boundary[np.argmax([len(x.coords) for x in intersection_.boundary])]
+    else:
+        boundary = intersection_.boundary
+    if intersection_.area==0.0:
+        return []
+    return np.asarray(boundary).astype(int)
+#    #vertices[vertices<0] = -1
+#    mask = (vertices>=0).all(1)
+#    vertices = vertices[mask, :]
+#    if vertices.shape[1] < 2:
+#        return []
+#    shape_yx = np.flipud(shape)
+#    for nn in range(len(shape)):
+#        mask = vertices[:,nn]>shape_yx[nn]
+#        #vertices[vertices[:,nn]>shape_yx[nn], nn] = shape_yx[nn]
+#        vertices = vertices[~mask, :]
+#    return vertices.astype(int)
 
 
 def shift_vertices(vertices, start_xy, size_xy):

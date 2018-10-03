@@ -22,17 +22,26 @@ store them in JSON files, preserving original label in free text form.
 
 These MS-COCO JSON masks can be converted to one-hot [ height x width x classes] or sparse [height x width ] format. As a rule we store them in sparse format in png files when needed.
 
+## Functions
+
+
+
 ## Pipeline
 
     # download SVS file from Google Cloud Storage and sample patches from it
     pull_n_chop.sh
 
-    # link inflammation vs everything else classes
-    link_binary_infl_norm.sh
-
     # subsample if needed
-    DATADIR="../data/......."
-    subsample.py $DATADIR
+    FACTOR=2 # produces 512x512
+    FACTOR=4 # produces 256x256 
+
+    DATADIR="/repos/data/data_1024/fullsplit/all"
+    subsample.py $DATADIR $FACTOR
+
+    # link inflammation vs everything else classes
+    # BASEDIR="/repos/data/data_1024/"
+    BASEDIR="/repos/data/data_128_subsample_8x/"
+    ./link_binary_infl_norm.sh $BASEDIR
 
     # split into train and test set
     makesets.sh
