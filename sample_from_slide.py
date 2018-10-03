@@ -30,14 +30,16 @@ def get_img_id(svsname):
     imgid = re.sub("\.svs$","", os.path.basename(svsname)).replace(" ", "_").replace("-","_")
     return imgid
 
-def get_prefix(imgid, pos, name, tissueid, id, parentdir = "data"):
-    prefix = "{parentdir}/{typ}/{imgid}-{pos}-t{tissue}-r{roiid}-{typ}".format(**{
+def get_prefix(imgid, pos, name, tissueid, id, parentdir = "data", suffix=''):
+    prefix = "{parentdir}/{typ}/{imgid}-{pos}-t{tissue}-r{roiid}-{typ}{suffix}".format(**{
                                         "tissue":tissueid,
                                         "pos": "x{}-y{}".format(*pos),
                                         "parentdir":parentdir,
                                         "imgid":imgid,
                                         "roiid":id,
-                                        "typ": (name.replace(" ","_"))})
+                                        "typ": (name.replace(" ","_")),
+                                        "suffix":suffix,
+                                        })
     return prefix
 
 def summarize_rois_wi_patch(rois, bg_names = ["tissue"]):
@@ -54,7 +56,7 @@ def summarize_rois_wi_patch(rois, bg_names = ["tissue"]):
         areas.append(rr['area'])
         ids.append(rr['id'])
 #     assert (len(tissue_info)==1)
-    tissue_id = "+".join(["%s"%tt['id'] for tt in tissue_info])
+    tissue_id = "+".join(sorted(["%s"%tt['id'] for tt in tissue_info]))
     dfareas = (pd.DataFrame(dict(area=areas, name=names, id=ids))
                      .sort_values("area", ascending=False)
                )
@@ -70,7 +72,7 @@ def summarize_rois_wi_patch(rois, bg_names = ["tissue"]):
         id = areasum["id"][0]
     else:
         name = '+'.join(areasum.index.tolist())
-        id = '+'.join(areasum["id"].astype(str).tolist())
+        id = '+'.join(sorted(areasum["id"].astype(str).tolist()))
     return {"name":name,
             "id": str(id),
             "tissue_id": tissue_id,
@@ -97,12 +99,17 @@ def get_tissue_rois(slide,
                     roilist,
                     vis = False,
                     step = 1024,
+                    magnlevel = 0,
                     target_size = None,
                     maxarea = 1e7,
                     random=False,
+                    normal_only=True,
+                    shift_factor = 2, 
                    ):
 
-    target_size = [step]*2
+    print("NORMAL_ONLY", normal_only)
+    if target_size is None:
+        target_size = [step]*2
 
     tissue_rois = [roi for roi in roilist if roi['name']=='tissue']
 
@@ -111,9 +118,10 @@ def get_tissue_rois(slide,
         cont = roi["vertices"]
         points = sample_points_wi_contour(cont,
                                       step = step,
-                                      shift = -step//2,
+                                      shift = -step//shift_factor,
                                       random=random)
 
+        print("roi {} #{}:\t{:d} points sampled".format(roi["name"], roi["id"],len(points), ))
         pointroilist = [{"vertices":[pp], "area":0} for pp in points]
         
 #         img_arr, roi_cropped_list, msk_arr, = \
@@ -121,6 +129,7 @@ def get_tissue_rois(slide,
                                         pointroilist,
                                         but_list = roilist,
                                         target_size = target_size,
+                                        magnlevel = magnlevel,
                                         maxarea = maxarea,
                                         color=1,
                                         nchannels=3,
@@ -131,8 +140,10 @@ def get_tissue_rois(slide,
 #             plt.scatter(points[:,0], points[:,1],c='r')
 #             plot_contour(cont)
         # filter for rois with only normal tissue 
-        normal_tissue_only_iter = filter(lambda x: all(roi['name']=='tissue' for roi in x[1]), imgroiiter )
-        yield normal_tissue_only_iter
+        if normal_only:
+            imgroiiter = filter(lambda x: all(roi['name']=='tissue' for roi in x[1]),
+            imgroiiter)
+        yield imgroiiter
 
 
 def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data",
@@ -145,7 +156,7 @@ def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data",
     for ii, (reg, rois, _, start_xy) in enumerate(imgroiiter):
         sumdict = summarize_rois_wi_patch(rois, bg_names = [])
         prefix = get_prefix(imgid, start_xy, sumdict["name"], sumdict["id"], ii,
-                            parentdir=parentdir)
+                            parentdir=parentdir,)
 
         #fn_summary_json = prefix + "-summary.json"
         fn_json = prefix + ".json"
@@ -272,12 +283,30 @@ if __name__ == '__main__':
       '--uid',
       action='store_true',
       default=False,
-      help='generate uid.')
+      help='generate uid')
+
+    parser.add_argument(
+      '--all-grid',
+      action='store_true',
+      default=False,
+      help='store all grid patches (by defaut grid patches that overlap features will be removed)')
 
     parser.add_argument(
       '--keep-levels',
       type=int,
       default=3,
+      help='.')
+
+    parser.add_argument(
+      '--magnlevel',
+      type=int,
+      default=0,
+      help='.')
+
+    parser.add_argument(
+      '--frac-stride',
+      type=int,
+      default=1,
       help='.')
 
     prms = parser.parse_args()
@@ -356,8 +385,7 @@ if __name__ == '__main__':
         print(mask.max())
 
     #############################
-    print("READING TARGETED ROIS")
-
+    print("READING TARGETED ROIS (GLOMERULI, INFLAMMATION LOCI ETC.)")
     imgroiiter = read_roi_patches_from_slide(slide, roilist,
                             target_size = target_size,
                             maxarea = prms.max_area,
@@ -365,12 +393,11 @@ if __name__ == '__main__':
                             allcomponents=True,
                            )
 
-    print("READING AND SAVING SMALLER ROIS (GLOMERULI, INFLAMMATION LOCI ETC.)")
 
     for reg, rois,_, start_xy in imgroiiter:
         sumdict = summarize_rois_wi_patch(rois, bg_names = ["tissue"])
         prefix = get_prefix(imgid, start_xy, sumdict["name"], sumdict["tissue_id"],
-                            sumdict["id"], parentdir=outdir)
+                            sumdict["id"], parentdir=outdir, suffix='-targeted')
         #fn_summary_json = prefix + "-summary.json"
         fn_json = prefix + ".json"
         fnoutpng = prefix + '.png'
@@ -392,13 +419,16 @@ if __name__ == '__main__':
         with open(fn_json, 'w+') as fhj: json.dump( rois, fhj)
 
     print("READING AND SAVING _FEATURELESS_ / NORMAL TISSUE")
+    magnification = 4**prms.magnlevel
+    real_side = prms.target_side * magnification
     for tissue_chunk_iter in get_tissue_rois(slide,
                                             roilist,
                                             vis = False,
-                                            step = 1024,
-                                            target_size = None,
+                                            step = real_side // prms.frac_stride,
+                                            target_size = [real_side]*2,
                                             maxarea = 1e7,
                                             random=False,
+                                            normal_only = not prms.all_grid,
                                            ):
             # save
             save_tissue_chunks(tissue_chunk_iter, imgid, uid=uid, parentdir=outdir,
