@@ -1,4 +1,0 @@
-[submodule "anonymize_slide"]
-	path = anonymize_slide
-	url = https://github.com/DSLituiev/anonymize_slide
-	branch = master
