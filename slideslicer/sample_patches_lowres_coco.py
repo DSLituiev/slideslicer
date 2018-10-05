@@ -1,6 +1,5 @@
 
 # coding: utf-8
-from bs4 import BeautifulSoup
 import numpy as np
 from collections import Counter
 import pandas as pd
@@ -9,13 +8,12 @@ import re
 import json
 import yaml
 import openslide
-#from matplotlib import pyplot as plt
 import cv2
 from shapely.geometry import Polygon, MultiPolygon
 
 from pycocotools.mask import encode, decode
 from copy import deepcopy
-from extract_rois_svs_xml import extract_rois_svs_xml, get_chunk_masks
+from extract_rois_svs_xml import extract_rois_svs_xml 
 from slideutils import (plot_contour, get_median_color, get_thumbnail_magnification,
                        CropRotateRoi, get_img_bbox, get_rotated_highres_roi, get_uniform_tiles,
                        get_contour_centre, read_roi_patches_from_slide,

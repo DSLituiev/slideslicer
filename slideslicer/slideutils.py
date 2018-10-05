@@ -159,7 +159,7 @@ def get_median_color(slide):
                               np.asarray(slide.associated_images["thumbnail"]),
                               [0,1]).ravel()
 
-
+#rename: get_threshold_tissue_mask()
 def get_chunk_masks(img, color=False, filtersize=7,
                    lower = [0, 0, 180],
                    upper = [179, 20, 255],
