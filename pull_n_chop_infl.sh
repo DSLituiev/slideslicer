@@ -29,4 +29,7 @@ do
     python3 $PWD/sample_from_slide.py --data-root "../data/" --all-grid $XML && rm $SVS
 done
 
-rm -rf $TMPDIR
+if [ $RMTMP ]
+then
+    rm -rf $TMPDIR
+fi
