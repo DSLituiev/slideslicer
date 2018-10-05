@@ -10,7 +10,6 @@ import re
 import json
 import openslide
 import cv2
-from uuid import uuid1
 from pycocotools.mask import encode, decode
 
 from extract_rois_svs_xml import extract_rois_svs_xml
@@ -27,7 +26,9 @@ from slideutils import (plot_contour, get_median_color,
 
 
 def get_img_id(svsname):
-    imgid = re.sub("\.svs$","", os.path.basename(svsname)).replace(" ", "_").replace("-","_")
+    imgid = re.sub("\.svs$","", 
+                   os.path.basename(svsname)
+                   ).replace(" ", "_").replace("-","_")
     return imgid
 
 def get_prefix(imgid, pos, name, tissueid, id, parentdir = "data", suffix=''):
@@ -41,6 +42,7 @@ def get_prefix(imgid, pos, name, tissueid, id, parentdir = "data", suffix=''):
                                         "suffix":suffix,
                                         })
     return prefix
+
 
 def summarize_rois_wi_patch(rois, bg_names = ["tissue"]):
     names = []
@@ -90,7 +92,9 @@ def visualise_chunks_and_rois(img_arr, roi_cropped_list,
             if rr['name'] == 'tissue':
                 continue
             plot_contour(rr["vertices"], ax=ax)
-        ax.set_xlabel("\n".join(["{}: {}".format(rr['id'], rr['name']) for rr in rois if rr['name'] !='tissue']))
+        xlab = "\n".join(["{}: {}".format(rr['id'], rr['name']) \
+                          for rr in rois if rr['name'] !='tissue'])
+        ax.set_xlabel(xlab)
         ax.set_xticklabels([])
         ax.set_yticklabels([])
         
@@ -140,13 +144,14 @@ def get_tissue_rois(slide,
 #             plt.scatter(points[:,0], points[:,1],c='r')
 #             plot_contour(cont)
         # filter for rois with only normal tissue 
+        def filter_(x):
+            return all(roi['name']=='tissue' for roi in x[1])
         if normal_only:
-            imgroiiter = filter(lambda x: all(roi['name']=='tissue' for roi in x[1]),
-            imgroiiter)
+            imgroiiter = filter(filter_, imgroiiter)
         yield imgroiiter
 
 
-def save_tissue_chunks(imgroiiter, imgid, uid=False, parentdir="data",
+def save_tissue_chunks(imgroiiter, imgid, parentdir="data",
                        lower = [0, 0, 180],
                        upper = [179, 10, 255],
                        close=50,
@@ -194,7 +199,8 @@ def add_roi_bytes(rois, reg,
         if roi_["name"] == "tissue":
             tissue_roi = roi_
             continue
-        mask_ = get_roi_mask(roi_["vertices"], reg.shape[1], reg.shape[0], fill=1, order='F')
+        mask_ = get_roi_mask(roi_["vertices"], reg.shape[1], reg.shape[0],
+                             fill=1, order='F')
 
         cocomask = encode(np.asarray(mask_, dtype='uint8'))
         cocomask["counts"] = cocomask["counts"].decode('utf-8')
@@ -280,12 +286,6 @@ if __name__ == '__main__':
       help='The XML file for ROI.')
 
     parser.add_argument(
-      '--uid',
-      action='store_true',
-      default=False,
-      help='generate uid')
-
-    parser.add_argument(
       '--all-grid',
       action='store_true',
       default=False,
@@ -312,19 +312,12 @@ if __name__ == '__main__':
     prms = parser.parse_args()
     VISUALIZE = False
 
-    if prms.uid:
-        uid = uuid1().hex
-    else:
-        uid=False
-
     lower = [0, 0, 180]
     upper = [179, 10, 255]
     close=50
     open_=30
     filtersize = 20
 
-    #fnxml = "../data/raw/70bb3032750d09e7549928c0dbf79afc30d7cb68.xml"
-    #fnxml = sys.argv[1]
     fnsvs = re.sub(".xml$", ".svs", prms.fnxml)
 
     outdir = os.path.join(prms.data_root, "data_{}/fullsplit".format(prms.target_side))
@@ -385,7 +378,8 @@ if __name__ == '__main__':
         print(mask.max())
 
     #############################
-    print("READING TARGETED ROIS (GLOMERULI, INFLAMMATION LOCI ETC.)")
+    print("READING TARGETED ROIS", file=sys.stderr)
+
     imgroiiter = read_roi_patches_from_slide(slide, roilist,
                             target_size = target_size,
                             maxarea = prms.max_area,
@@ -393,6 +387,8 @@ if __name__ == '__main__':
                             allcomponents=True,
                            )
 
+    print("READING AND SAVING SMALLER ROIS (GLOMERULI, INFLAMMATION LOCI ETC.)",
+          file=sys.stderr) 
 
     for reg, rois,_, start_xy in imgroiiter:
         sumdict = summarize_rois_wi_patch(rois, bg_names = ["tissue"])
@@ -414,13 +410,13 @@ if __name__ == '__main__':
                              close=close,
                              open=open_,
                              filtersize = filtersize)
-        # mask_ = decode(rois[-1]).astype(bool)
-        # plt.imshow(mask_ )
         with open(fn_json, 'w+') as fhj: json.dump( rois, fhj)
 
-    print("READING AND SAVING _FEATURELESS_ / NORMAL TISSUE")
+    print("READING AND SAVING _FEATURELESS_ / NORMAL TISSUE", file=sys.stderr)
+
     magnification = 4**prms.magnlevel
     real_side = prms.target_side * magnification
+
     for tissue_chunk_iter in get_tissue_rois(slide,
                                             roilist,
                                             vis = False,
@@ -431,7 +427,7 @@ if __name__ == '__main__':
                                             normal_only = not prms.all_grid,
                                            ):
             # save
-            save_tissue_chunks(tissue_chunk_iter, imgid, uid=uid, parentdir=outdir,
+            save_tissue_chunks(tissue_chunk_iter, imgid, parentdir=outdir,
                                close=close,
                                open_=open_,
                                filtersize = filtersize)

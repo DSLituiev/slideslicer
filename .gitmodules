@@ -1,0 +1,3 @@
+[submodule "anonymize-slide"]
+	path = anonymize-slide
+	url = https://github.com/bgilbert/anonymize-slide

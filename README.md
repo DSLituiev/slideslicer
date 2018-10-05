@@ -1,7 +1,16 @@
 
 ## Setup
 
-install cocotools
+install `cocotools` (pip fails, need to run setup.py script)
+
+    git clone https://github.com/cocodataset/cocoapi
+    cd cocoapi/PythonAPI
+    python setup.py install
+
+clone this repository with `--recursive` flag:
+
+    git clone --recursive https://github.com/DSLituiev/slideslicer
+
 
 ## Input data
 
@@ -23,7 +32,6 @@ store them in JSON files, preserving original label in free text form.
 These MS-COCO JSON masks can be converted to one-hot [ height x width x classes] or sparse [height x width ] format. As a rule we store them in sparse format in png files when needed.
 
 ## Functions
-
 
 
 ## Pipeline

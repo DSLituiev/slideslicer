@@ -1,10 +1,11 @@
-
 import numpy as np
 import json
 from pycocotools.mask import encode, decode
 
+
 def remove_upper_channel(lo, hi):
     """
+    take difference between two channels:
     # RULE
     lo )  0 0 1 1
     up )  0 1 0 1
@@ -72,6 +73,7 @@ def construct_sparse_mask(rois, tissuedict):
 def dense_to_sparse(maskarr):
     return (np.arange(maskarr.shape[-1]).reshape([1,1,-1]) *
             maskarr).sum(-1)
+
 
 def read_roi_to_sparse(jsonfile, roidict):
     with open(jsonfile) as fh:
