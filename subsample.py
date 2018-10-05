@@ -1,18 +1,6 @@
 import os, sys
 from PIL import Image
 
-original_side= 1024
-side = 512 //2 
-size = side, side
-
-
-factor = original_side // side
-
-indir = sys.argv[1] 
-OUTDIR = "../data_{}_subsample_{}x/fullsplit".format(side, factor)
-
-os.makedirs(OUTDIR, exist_ok = True)
-
 def get_outfile(infile):
     outfile = os.path.basename(infile)
     outsubdir = os.path.basename(os.path.dirname(infile))
@@ -21,6 +9,8 @@ def get_outfile(infile):
 
 def filegen(indir, ext='png'):
     for dd in os.scandir(indir):
+        if not os.path.isdir(dd.path):
+            continue
         for ff in os.scandir(dd.path):
             if not ff.name.endswith(ext):
                 continue
@@ -78,6 +68,25 @@ def subsample_roi(fn, fnout):
     with open(fnout, 'w+') as fh:
         json.dump(rois, fh)
 
+####################################################################
+
+original_side= 1024
+#side = 512 //2 
+#factor = original_side // side
+
+indir = sys.argv[1]
+factor = int(sys.argv[2])
+
+
+basedir = os.path.dirname(indir.rstrip('/'))
+basedir = os.path.dirname(basedir)
+basedir = os.path.dirname(basedir)
+
+side = original_side // factor
+OUTDIR = "{}/data_{}_subsample_{}x/fullsplit/all".format(basedir, side, factor)
+print("SAVING TO:", OUTDIR, sep='\t')
+size = side, side
+os.makedirs(OUTDIR, exist_ok = True)
 
 print("SUBSAMPLE IMAGES")
 for infile in filegen(indir):
