@@ -91,6 +91,8 @@ def _permute_polygon_(pp, fraction=3, break_point=None):
     return pp
 
 # see https://github.com/bgilbert/anonymize-slide
+
+# move to parse_leica_xml.py 
 def get_ellipse_points(verticeslist, num=200):
     a,b = tuple(abs(verticeslist[1] - verticeslist[0])/2)
     xc, yc = tuple(abs(verticeslist[1] + verticeslist[0])/2)
@@ -100,7 +102,9 @@ def get_ellipse_points(verticeslist, num=200):
     return np.c_[x,y].tolist()
 #     return ((x),list(y))
 
+# delete 
 def get_vertices(region):
+    "convert xml structured vertices to list of lists"
     verticeslist = [cc for cc in region.vertices.children if cc!='\n']
     verticeslist = [(vv.get('x'), vv.get('y')) for vv in verticeslist]
     verticeslist = [(float(x), float(y)) for x,y in verticeslist]
@@ -111,37 +115,9 @@ def get_vertices(region):
 
 # ## functions for rotating, slicing, and stitching the picture
 
-def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C'):
-    """
-    get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C')
-    """
-    img = Image.new('L', (width, height), 0)
-    if len(roi)>1 and shape=='polygon':# roi.shape[0]>1:
-        roi = [tuple(x) for x in roi]
-        ImageDraw.Draw(img).polygon(roi, outline=fill, fill=fill)
-        mask = np.asarray(img, dtype='uint8', order=order)
-    else:
-        ImageDraw.Draw(img).point(roi, fill=255)
-        img = img.filter(ImageFilter.GaussianBlur(radius=radius))
-        thr = np.exp(-0.5)*img.getextrema()[1]
-        mask = fill*np.asarray(np.asarray(img,)>thr, dtype='uint8', order=order)
-    return mask
 
 
-def get_roi_dict(contour, name='tissue', id=0, sq_micron_per_pixel=None):
-    """input: 
-        contour: numpy array
-    """
-    cdict = {'id':id, 
-            'name': name,
-            'vertices':contour.tolist(),
-           'area': cv2.contourArea(np.asarray(contour, dtype='int32'))
-           }
-    if sq_micron_per_pixel:
-        cdict['areamicrons'] = cdict['area'] * sq_micron_per_pixel
-    return cdict
-
-
+# delete ? 
 def map_countour_bbox(contour, slide_dimensions,
                      SUBSAMPLE_RATE=8):
     
@@ -165,7 +141,6 @@ def map_countour_bbox(contour, slide_dimensions,
     xtot_hr = xmax_hr - xmin_hr
     print(xtot_hr, ytot_hr)
     
-    
     loc_hr = (xmin_hr, ymin_hr)
     size_hr = (xtot_hr, ytot_hr)
     size_hr = [SUBSAMPLE_RATE*(ss//SUBSAMPLE_RATE) for ss in size_hr]
@@ -178,10 +153,12 @@ def map_countour_bbox(contour, slide_dimensions,
     img_hr.thumbnail(target_size, Image.ANTIALIAS)
     return img_hr
 
+
 def get_median_color(slide):
     return np.apply_over_axes(np.median, 
                               np.asarray(slide.associated_images["thumbnail"]),
                               [0,1]).ravel()
+
 
 def get_chunk_masks(img, color=False, filtersize=7,
                    lower = [0, 0, 180],
@@ -189,7 +166,10 @@ def get_chunk_masks(img, color=False, filtersize=7,
                      close=True,
                      open=False,
                      dtype='uint8'):
-
+    """Returns masks of tissue chunks by
+    1) thresholding in grayscale or color space and 
+    2) morphological open/close operations
+    """
     filtersize = filtersize if filtersize % 2 == 1 else filtersize+1
     kernel = (filtersize,filtersize)
     if color:
@@ -230,12 +210,55 @@ def get_chunk_masks(img, color=False, filtersize=7,
         mask = mask.astype('uint8')
     return mask
 
+# rename to : construct_dict_from_verts
+def get_roi_dict(contour, name='tissue', id=0, sq_micron_per_pixel=None):
+    """input: 
+        contour: numpy array
+    """
+    cdict = {'id':id, 
+            'name': name,
+            'vertices':contour.tolist(),
+            'area': cv2.contourArea(np.asarray(contour, dtype='int32'))
+           }
+    if sq_micron_per_pixel:
+        cdict['areamicrons'] = cdict['area'] * sq_micron_per_pixel
+    return cdict
+
+# rename to : convert_verts2mask / convert_contour2mask
+def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C'):
+    """
+    get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C')
+    """
+    img = Image.new('L', (width, height), 0)
+    if len(roi)>1 and shape=='polygon':# roi.shape[0]>1:
+        roi = [tuple(x) for x in roi]
+        ImageDraw.Draw(img).polygon(roi, outline=fill, fill=fill)
+        mask = np.asarray(img, dtype='uint8', order=order)
+    else:
+        ImageDraw.Draw(img).point(roi, fill=fill)
+        img = img.filter(ImageFilter.GaussianBlur(radius=radius))
+        thr = np.exp(-0.5)*img.getextrema()[1]
+        mask = fill*np.asarray(np.asarray(img,)>thr, dtype='uint8', order=order)
+    return mask
+
+
+# merge with get_roi_mask/ convert_contour2mask
+def get_region_mask(vertices, start_xy, size_xy, color=(1)):
+    vertices = shift_vertices(vertices, start_xy, size_xy)
+    mask = cv2.fillPoly(np.zeros(size_xy[::-1]),
+                        pts =[ vertices ],
+                        color=color)
+    return mask, vertices
+
+
+# rename convert_mask2verts / convert_mask2contour
 def get_contours_from_mask(mask, minlen = 50):
     im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
     if minlen is not None:
         contours = [np.squeeze(x) for x in contours if x.shape[0]>minlen]
     return contours
+
 
 def get_chunk_countours(img, color=False, filtersize=7, minlen = 100):
     mask = get_chunk_masks(img, color=color, filtersize=filtersize)
@@ -546,7 +569,7 @@ def read_roi_patches_from_slide(slide, roilist,
             bbox = start_xy + size_xy
             sublist = []
             for roi in checklist:
-                print("clipping", roi['id'], roi['name'], 'bbox', roi["bbox"])
+                #print("clipping", roi['id'], roi['name'], 'bbox', roi["bbox"])
                 #print(len(roi["vertices"]))
                 vert = clip_roi_wi_bbox(bbox,
                                         roi["vertices"],
@@ -576,12 +599,12 @@ def read_roi_patches_from_slide(slide, roilist,
         yield reg, sublist, msk, start_xy
 
 
-def remove_outlier_vertices(vertices, shape):
-    shape = np.asarray(shape[:2])
+def remove_outlier_vertices(vertices, size_xy):
+    size_xy = np.asarray(size_xy[:2])
     rectangle = Polygon(np.asarray([[0,0],
-                                    [shape[0], 0],
-                                    shape,
-                                    [0, shape[1]]
+                                    [ size_xy[0], 0],
+                                    size_xy,
+                                    [0, size_xy[1]]
                                     ]))
     vertices = vertices.copy()
     roi_polygon = Polygon(np.asarray(vertices))
@@ -623,7 +646,8 @@ using the largest segment
 def shift_vertices(vertices, start_xy, size_xy):
     """shift and crop vertices to a new image patch"""
     shifted_verices = vertices - np.asarray(start_xy)
-    cropped_vertices = remove_outlier_vertices(shifted_verices, size_xy[::-1])
+    cropped_vertices = remove_outlier_vertices(shifted_verices, 
+                                               size_xy)
     return cropped_vertices
 
 
@@ -643,12 +667,6 @@ def clip_roi_wi_bbox(patch_bbox, other_roi, other_bbox=None):
     else:
         return None
 
-def get_region_mask(vertices, start_xy, size_xy, color=(1)):
-    vertices = shift_vertices(vertices, start_xy, size_xy)
-    mask = cv2.fillPoly(np.zeros(size_xy[::-1]),
-                        pts =[ vertices ],
-                        color=color)
-    return mask, vertices
 
 def rectangle_intersection(a,b):
     x = max(a[0], b[0])
