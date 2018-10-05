@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 #import cv2
 import numpy as np
 from shapely.geometry import Polygon
+from parse_leica_xml import parse_xml2annotations
 
 from slideutils import (get_vertices, get_roi_dict, get_median_color,
                         get_chunk_masks, get_contours_from_mask,
@@ -79,29 +80,41 @@ def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, minlen=50, keepl
         fnjson = os.path.join(outdir, fnjson)
         os.makedirs(os.path.dirname(fnjson), exist_ok = True)
 
-    with open(fnxml) as fh:
-        soup = BeautifulSoup(fh, 'lxml')
-    regions = soup.find_all("region")
 
-    # fine-parse and format the extracted rois:
-    roilist = []
-    for rr in regions:
-    #     name = rr.get("text").lower().rstrip('.')
-        attrs_ = rr.attrs.copy()
-        if ("text" in attrs_) and not ("name" in attrs_):
-            attrs_["name"] = attrs_.pop("text").lower().rstrip('.')
-        for kk,vv in attrs_.items():
-            if isinstance(vv,str) and vv.isdigit():
-                attrs_[kk] = int(vv)
-            else:
-                try:
-                    attrs_[kk] = float(vv)
-                except:
-                    if attrs_[kk]=='':
-                        attrs_[kk]=None
-                    continue
-        attrs_["vertices"] = get_vertices(rr)
-        roilist.append(attrs_)
+    ############################
+    # parsing XML
+    ############################
+    roilist = parse_xml2annotations(fnxml)
+    for roi in roilist:
+        roi["name"] = roi.pop("text").lower().rstrip('.')
+    #import ipdb; ipdb.set_trace()
+
+    #with open(fnxml) as fh:
+    #    soup = BeautifulSoup(fh, 'lxml')
+    #regions = soup.find_all("region")
+
+    ## fine-parse and format the extracted rois:
+    #roilist = []
+    #for rr in regions:
+    ##     name = rr.get("text").lower().rstrip('.')
+    #    attrs_ = rr.attrs.copy()
+    #    if ("text" in attrs_) and not ("name" in attrs_):
+    #        attrs_["name"] = attrs_.pop("text").lower().rstrip('.')
+    #    for kk,vv in attrs_.items():
+    #        if isinstance(vv,str) and vv.isdigit():
+    #            attrs_[kk] = int(vv)
+    #        else:
+    #            try:
+    #                attrs_[kk] = float(vv)
+    #            except:
+    #                if attrs_[kk]=='':
+    #                    attrs_[kk]=None
+    #                continue
+    #    attrs_["vertices"] = get_vertices(rr)
+    #    roilist.append(attrs_)
+
+    ############################
+    ############################
 
     # for an ellipse, 
     #    area = $\pi \times r \times R$
@@ -147,7 +160,7 @@ def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, minlen=50, keepl
     return fnjson
 
 if __name__ == "__main__":
-    fnxml = "examples/6371/6371 1.xml"
+    fnxml = sys.argv[1]
 
     outfile = extract_rois_svs_xml(fnxml)
     print(outfile)
