@@ -21,7 +21,6 @@ def filegen(indir, ext='png'):
             yield ff.path
 
 
-
 def subsample_coco_mask(mask):
     mask = Image.fromarray(mask)
     mask.thumbnail(size, Image.ANTIALIAS)
@@ -42,6 +41,7 @@ def subsample_verts(verts, factor):
             newverts.append(vv)
         vvprev = vv.copy()
     return newverts
+
 
 def subsample_roi(fn, fnout):
     with open(fn) as fh:
@@ -67,50 +67,68 @@ def subsample_roi(fn, fnout):
 
 ####################################################################
 
-original_side= 1024
-#side = 512 //2 
-#factor = original_side // side
+if __name__ == '__main__':
+    import sys
+    import argparse
 
-indir = sys.argv[1]
-factor = int(sys.argv[2])
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+      'data-root',
+      type=str,
+      help='The directory where the MSCOCO-formatted data are stored.')
+
+    parser.add_argument(
+        '--original-side',
+        type=int,
+		default=1024,
+        help='The directory where the MSCOCO-formatted data are stored.')
+
+    parser.add_argument(
+        '--factor',
+        type=float,
+		default=2.0,
+        help='subsampling factor')
+
+    prms = parser.parse_args()
+
+	basedir = os.path.dirname(prms.data_root.rstrip('/'))
+	basedir = os.path.dirname(basedir)
+	basedir = os.path.dirname(basedir)
+
+	side = prms.original_side // prms.factor
+	size = side, side
+	OUTDIR = ("{}/data_{}_subsample_{}x/fullsplit/all"
+				.format(basedir, side, prms.factor))
+
+	print("SAVING TO:", OUTDIR, sep='\t')
+	os.makedirs(OUTDIR, exist_ok = True)
+
+	print("SUBSAMPLE IMAGES")
+	for infile in filegen(prms.data_root):
+		outfile = get_outfile(infile)
+		os.makedirs(os.path.dirname(outfile), exist_ok=True)
+		if infile != outfile:
+			try:
+				im = Image.open(infile)
+				im.thumbnail(size, Image.ANTIALIAS)
+				im.save(outfile, "png")
+			except IOError as ee:
+				print( "cannot create thumbnail for '%s'" % infile)
+				print(ee)
 
 
-basedir = os.path.dirname(indir.rstrip('/'))
-basedir = os.path.dirname(basedir)
-basedir = os.path.dirname(basedir)
-
-side = original_side // factor
-OUTDIR = "{}/data_{}_subsample_{}x/fullsplit/all".format(basedir, side, factor)
-print("SAVING TO:", OUTDIR, sep='\t')
-size = side, side
-os.makedirs(OUTDIR, exist_ok = True)
-
-print("SUBSAMPLE IMAGES")
-for infile in filegen(indir):
-    outfile = get_outfile(infile)
-    os.makedirs(os.path.dirname(outfile), exist_ok=True)
-    if infile != outfile:
-        try:
-            im = Image.open(infile)
-            im.thumbnail(size, Image.ANTIALIAS)
-            im.save(outfile, "png")
-        except IOError as ee:
-            print( "cannot create thumbnail for '%s'" % infile)
-            print(ee)
-
-
-print("SUBSAMPLE MASKS")
-for infile in filegen(indir, ext = '.json'):
-    outfile = get_outfile(infile)
-    if infile != outfile:
-        try:
-            subsample_roi(infile, outfile)
-        except IOError as ee:
-            print( "cannot create thumbnail for '%s'" % infile)
-            print(ee)
-        except Exception as ee:
-            print( "cannot create thumbnail for '%s'" % infile)
-            raise ee
+	print("SUBSAMPLE MASKS")
+	for infile in filegen(prms.data_root, ext = '.json'):
+		outfile = get_outfile(infile)
+		if infile != outfile:
+			try:
+				subsample_roi(infile, outfile)
+			except IOError as ee:
+				print( "cannot create thumbnail for '%s'" % infile)
+				print(ee)
+			except Exception as ee:
+				print( "cannot create thumbnail for '%s'" % infile)
+				raise ee
 
 
 
