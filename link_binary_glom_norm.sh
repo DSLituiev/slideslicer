@@ -19,6 +19,7 @@ mkdir -p $OUTDIR/normal
 #ln -s $INDIR/*infl*/*png $OUTDIR/infl
 
 find $INDIR/*$TAG*/*png  -exec sh -c 'ln -s $(readlink -f $1) '$OUTDIR/$TAG'' _ {} \;
+find $INDIR/*$TAG*/*json  -exec sh -c 'ln -s $(readlink -f $1) '$OUTDIR/$TAG'' _ {} \;
 
 
 # link everything else
@@ -32,6 +33,7 @@ do
         echo "${dd}"
         #ln -s $INDIR/${dd}/*png $OUTDIR/normal/
         find $INDIR/${dd}/*png -exec sh -c 'ln -s $(readlink -f $1) '$OUTDIR/normal/'' _ {} \;
+        find $INDIR/${dd}/*json -exec sh -c 'ln -s $(readlink -f $1) '$OUTDIR/normal/'' _ {} \;
     fi
 done
 
