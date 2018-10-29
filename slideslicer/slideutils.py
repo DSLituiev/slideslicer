@@ -14,6 +14,7 @@ import openslide
 from PIL import Image, ImageDraw
 import cv2
 import numpy as np
+from warnings import warn
 from shapely.geometry import Polygon, MultiPolygon, MultiLineString, LineString
 
 
@@ -512,6 +513,7 @@ def read_roi_patches_from_slide(slide, roilist,
                         nchannels=None,
                         allcomponents = False,
                         nomask=False,
+                        verbose=False,
                        ):
     """
     Input:
@@ -576,10 +578,12 @@ def read_roi_patches_from_slide(slide, roilist,
                                         roi["bbox"]) 
                 if vert is not None:
                     if len(vert) ==0:
-                        print('no vertices found', "skipping", roi['name'], roi['id'], 
-                              file=sys.stderr, sep='\t')
+                        msg = 'no vertices found; skipping; roi name: %s, id: %s' %(roi['name'], roi['id'])
+                        if verbose:
+                            print(msg, file=sys.stderr, sep='\t')
                         continue
-                    print('adding', roi['name'], roi['id'], file=sys.stderr, sep='\t')
+                    if verbose:
+                        print('adding', roi['name'], roi['id'], file=sys.stderr, sep='\t')
                     vert = (np.asarray(vert) * magnification).astype(int)
                     area = cv2.contourArea(vert)
                     if area>0.0:
@@ -599,7 +603,7 @@ def read_roi_patches_from_slide(slide, roilist,
         yield reg, sublist, msk, start_xy
 
 
-def remove_outlier_vertices(vertices, size_xy):
+def remove_outlier_vertices(vertices, size_xy, verbose=True):
     size_xy = np.asarray(size_xy[:2])
     rectangle = Polygon(np.asarray([[0,0],
                                     [ size_xy[0], 0],
@@ -614,15 +618,11 @@ def remove_outlier_vertices(vertices, size_xy):
     if not isinstance(intersection_, Polygon):
         if len(intersection_) == 0:
             return []
-        print("""multiple pieces after intersection
-using the largest piece
-""")
+        warn("multiple pieces after intersection; using the largest piece")
         intersection_ = intersection_[np.argmax([x.area for x in intersection_])]
     if isinstance(intersection_.boundary, MultiLineString):
-        print("""multiple boundary segments after intersection
-{}
-using the largest segment
-""".format(str([len(x.coords) for x in intersection_.boundary])))
+        warn("multiple boundary segments after intersection {}; using the largest segment"
+             .format(str([len(x.coords) for x in intersection_.boundary])))
         #print(intersection_.boundary[0])
         boundary = intersection_.boundary[np.argmax([len(x.coords) for x in intersection_.boundary])]
     else:
