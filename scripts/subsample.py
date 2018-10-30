@@ -44,7 +44,7 @@ def subsample_verts(verts, factor):
     return newverts
 
 
-def subsample_roi(fn, fnout, factor):
+def subsample_roi(fn, fnout):
     with open(fn) as fh:
         rois = json.load(fh)
 
@@ -115,9 +115,9 @@ if __name__ == '__main__':
         basedir = os.path.dirname(indir.rstrip('/'))
         basedir = os.path.dirname(basedir)
         basedir = os.path.dirname(basedir)
-
-    if len(args.outdir) == 0: 
         outdir = "{}/data_{}_subsample_{:s}x/fullsplit/all".format(basedir, side, factor)
+    else:
+        outdir = args.outdir
 
     print("SAVING TO:", outdir, sep='\t')
     os.makedirs(outdir, exist_ok = True)
@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
     print("SUBSAMPLING MASKS")
     for infile in filegen(indir, ext = '.json'):
-        outfile = get_outfile(infile)
+        outfile = get_outfile(infile, outdir=outdir)
         if infile != outfile:
             try:
                 subsample_roi(infile, outfile, factor)
@@ -147,6 +147,3 @@ if __name__ == '__main__':
             except Exception as ee:
                 print( "cannot create thumbnail for '%s'" % infile)
                 raise ee
-
-
-
