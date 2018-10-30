@@ -129,6 +129,12 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+      'fnxml',
+      type=str,
+      help='The XML file for ROI.')
+
     parser.add_argument(
       '--data-root',
       type=str,
@@ -151,24 +157,13 @@ if __name__ == '__main__':
       '--target-side',
       type=int,
       default=512,
-      help='The directory where the input data will be stored.')
+      help='Requested side (in pixels) of the image patches')
 
     parser.add_argument(
       '--max-area',
       type=float,
       default=1e7,
       help='maximal area of a roi')
-
-    parser.add_argument(
-      'fnxml',
-      type=str,
-      help='The XML file for ROI.')
-
-    parser.add_argument(
-      '--uid',
-      action='store_true',
-      default=False,
-      help='generate uid')
 
     parser.add_argument(
       '--all-grid',
@@ -201,20 +196,24 @@ if __name__ == '__main__':
       default=3,
       help='.')
 
+    parser.add_argument(
+      '--open',
+      type=int,
+      default=30,
+      help='morphological open kernel size')
+
+    parser.add_argument(
+      '--close',
+      type=int,
+      default=50,
+      help='morphological close kernel size')
+
     prms = parser.parse_args()
     VISUALIZE = False
 
-    if prms.uid:
-        uid = uuid1().hex
-    else:
-        uid=False
-
     lower = [0, 0, 180]
     upper = [179, 10, 255]
-    close=50
-    open_=30
     filtersize = 20
-    print("READING AND SAVING _FEATURELESS_ / NORMAL TISSUE")
 
     #category_lookup = {'tissue':1, 'other':2, 'infl':3, 'glom':4, 'scler_glom':5, }
     with open("tissuedict.yaml") as fh:
@@ -225,12 +224,14 @@ if __name__ == '__main__':
     slide = openslide.OpenSlide(fnsvs)
 
     # extract annotations
-    fnjson = extract_rois_svs_xml(prms.fnxml, remove_empty=True)
-    with open(fnjson, 'r') as fhj: 
-        roilist = json.load(fhj)
+    rreader = RoiReader(prms.fnxml, remove_empty=True)
+    roilist = rreader.rois
+    #fnjson = extract_rois_svs_xml(prms.fnxml, remove_empty=True)
+    #with open(fnjson, 'r') as fhj: 
+    #    roilist = json.load(fhj)
 
-    print("ROI type counts")
-    print(pd.Series([roi["name"] for roi in roilist]).value_counts())
+    #print("ROI type counts")
+    #print(pd.Series([roi["name"] for roi in roilist]).value_counts())
     #cell#
 
     magnification = 4**prms.magnlevel
@@ -240,7 +241,7 @@ if __name__ == '__main__':
     ANNDIR = IMGDIR
 
     print("magnification: %d" % magnification)
-    print("READING AND SAVING _FEATURELESS_ / NORMAL TISSUE")
+    print("SAVING CHUNKS")
     nrois = 0
     print("RLE:", prms.rle)
     for tissue_chunk_iter in get_tissue_rois(slide,
