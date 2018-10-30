@@ -5,11 +5,12 @@ import numpy as np
 from PIL import Image
 from pycocotools.mask import encode, decode
 
-def get_outfile(infile):
+def get_outfile(infile, outdir):
     outfile = os.path.basename(infile)
     outsubdir = os.path.basename(os.path.dirname(infile))
-    outfile = os.path.join(OUTDIR, outsubdir, outfile)
+    outfile = os.path.join(outdir, outsubdir, outfile)
     return outfile
+
 
 def filegen(indir, ext='png'):
     for dd in os.scandir(indir):
@@ -19,7 +20,6 @@ def filegen(indir, ext='png'):
             if not ff.name.endswith(ext):
                 continue
             yield ff.path
-
 
 
 def subsample_coco_mask(mask):
@@ -43,7 +43,8 @@ def subsample_verts(verts, factor):
         vvprev = vv.copy()
     return newverts
 
-def subsample_roi(fn, fnout):
+
+def subsample_roi(fn, fnout, factor):
     with open(fn) as fh:
         rois = json.load(fh)
 
@@ -58,7 +59,7 @@ def subsample_roi(fn, fnout):
         roi.update(cocomask)
 
         verts = roi["vertices"]
-        roi.update({"vertices":subsample_verts(verts, factor)})
+        roi.update({"vertices": subsample_verts(verts, factor)})
         if 'zoom' in roi:
             roi.pop('zoom')
 
@@ -66,51 +67,86 @@ def subsample_roi(fn, fnout):
         json.dump(rois, fh)
 
 ####################################################################
+if __name__ == '__main__':
+    import sys
+    import argparse
 
-original_side= 1024
-#side = 512 //2 
-#factor = original_side // side
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        'indir', type=str, help = 'input directory')
 
-indir = sys.argv[1]
-factor = int(sys.argv[2])
+    parser.add_argument(
+        '--outdir',
+        default='',
+        type=str,
+        help = 'output directory')
 
+    parser.add_argument(
+      '--original-side',
+      type=int,
+      default=1024,
+      help='Original side (in pixels) of the image patches')
 
-basedir = os.path.dirname(indir.rstrip('/'))
-basedir = os.path.dirname(basedir)
-basedir = os.path.dirname(basedir)
+    group = parser.add_mutually_exclusive_group(required=True)
 
-side = original_side // factor
-OUTDIR = "{}/data_{}_subsample_{}x/fullsplit/all".format(basedir, side, factor)
-print("SAVING TO:", OUTDIR, sep='\t')
-size = side, side
-os.makedirs(OUTDIR, exist_ok = True)
+    group.add_argument(
+      '--target-side',
+      type=int,
+      default=512,
+      help='Requested side (in pixels) of the image patches')
 
-print("SUBSAMPLE IMAGES")
-for infile in filegen(indir):
-    outfile = get_outfile(infile)
-    os.makedirs(os.path.dirname(outfile), exist_ok=True)
-    if infile != outfile:
-        try:
-            im = Image.open(infile)
-            im.thumbnail(size, Image.ANTIALIAS)
-            im.save(outfile, "png")
-        except IOError as ee:
-            print( "cannot create thumbnail for '%s'" % infile)
-            print(ee)
+    group.add_argument(
+      '--factor',
+      type=int,
+      default=None,
+      help='Requested subsampling rate')
+    
+    prms = parser.parse_args()
 
+    if args.factor is None:
+        factor = args.original_side // args.target_side 
+        side = args.target_side
+    else:
+        factor = args.factor
+        side = args.original_side // args.factor
+    size = side, side
 
-print("SUBSAMPLE MASKS")
-for infile in filegen(indir, ext = '.json'):
-    outfile = get_outfile(infile)
-    if infile != outfile:
-        try:
-            subsample_roi(infile, outfile)
-        except IOError as ee:
-            print( "cannot create thumbnail for '%s'" % infile)
-            print(ee)
-        except Exception as ee:
-            print( "cannot create thumbnail for '%s'" % infile)
-            raise ee
+    if len(args.outdir)==0:
+        basedir = os.path.dirname(indir.rstrip('/'))
+        basedir = os.path.dirname(basedir)
+        basedir = os.path.dirname(basedir)
+
+    if len(args.outdir) == 0: 
+        outdir = "{}/data_{}_subsample_{:s}x/fullsplit/all".format(basedir, side, factor)
+
+    print("SAVING TO:", outdir, sep='\t')
+    os.makedirs(outdir, exist_ok = True)
+
+    print("SUBSAMPLING IMAGES")
+    for infile in filegen(indir):
+        outfile = get_outfile(infile)
+        os.makedirs(os.path.dirname(outfile), exist_ok=True)
+        if infile != outfile:
+            try:
+                im = Image.open(infile)
+                im.thumbnail(size, Image.ANTIALIAS)
+                im.save(outfile, "png")
+            except IOError as ee:
+                print( "cannot create thumbnail for '%s'" % infile)
+                print(ee)
+
+    print("SUBSAMPLING MASKS")
+    for infile in filegen(indir, ext = '.json'):
+        outfile = get_outfile(infile)
+        if infile != outfile:
+            try:
+                subsample_roi(infile, outfile, factor)
+            except IOError as ee:
+                print( "cannot create thumbnail for '%s'" % infile)
+                print(ee)
+            except Exception as ee:
+                print( "cannot create thumbnail for '%s'" % infile)
+                raise ee
 
 
 
