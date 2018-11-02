@@ -291,7 +291,7 @@ def get_contour_centre(vertices):
 
 
 class CropRotateRoi():
-    def __init__(self, img, co, enlarge=1.00,
+    def __init__(self, co, enlarge=1.00,
                  use_offset=None, borderValue=None,
                  rotation_matrix=None, angle=None):
         
@@ -304,14 +304,14 @@ class CropRotateRoi():
             print("offset", self.offset)
         # calculate the affine transformation
         self.enlarge = enlarge
-        if isinstance(img, np.ndarray):
-            height = img.shape[0]
-            width = img.shape[1]
-        elif isinstance(img, Image.Image):
-            width = img.size[0]
-            height = img.size[1]
-        elif isinstance(img, (tuple,list)):
-            width, height = img
+        #if isinstance(img, np.ndarray):
+        #    height = img.shape[0]
+        #    width = img.shape[1]
+        #elif isinstance(img, Image.Image):
+        #    width = img.size[0]
+        #    height = img.size[1]
+        #elif isinstance(img, (tuple,list)):
+        #    width, height = img
         #self.img_size = (int(self.enlarge*height),int(self.enlarge*width), )
         if rotation_matrix is None:
             self.rotation_matrix, self.angle = CropRotateRoi.get_rotation_matrix(co, angle=angle)
@@ -330,13 +330,23 @@ class CropRotateRoi():
         self.affine_matrix = self.transl_matrix.dot(matrix_full)[:2,:]
         self.img_size = tuple(1+(self.apply_roi(co, use_offset=False).max(0)).astype(int)) #[::-1]
 
+    @property
+    def full_affine_matrix(self):
+        return CropRotateRoi._pad_affine_matrix_( self.affine_matrix )
+
+
+    @property
+    def full_rotation_matrix(self):
+        return CropRotateRoi._pad_affine_matrix_( self.rotation_matrix )
+
     @classmethod
     def get_rotation_matrix(self, co, angle=None):
-        xdim, ydim, angle_ = cv2.minAreaRect(co)
+        center, sz, angle_ = cv2.minAreaRect(co)
         if angle is not None:
             angle_ = angle
         
         box = cv2.boxPoints((xdim, ydim, angle_)) 
+        box = cv2.boxPoints((center, sz, angle_))
         xmin, ymin = box.min(0)
         xmax, ymax = box.max(0)
         rect_center = ((xmin+xmax)/2,(ymin+ymax)/2)
