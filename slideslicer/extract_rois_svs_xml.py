@@ -157,7 +157,7 @@ class RoiReader():
         return pd.DataFrame(self.rois)
 
 
-    def plot(self, fig=None, ax=None, labels=True):
+    def plot(self, fig=None, ax=None, labels=True, **kwargs):
         import matplotlib.pyplot as plt
         from itertools import cycle
         from slideutils import plot_contour
@@ -170,7 +170,7 @@ class RoiReader():
             if ax is not None:
                 fig = ax.get_figure()
             else:
-                fig, ax = plt.subplots(1)
+                fig, ax = plt.subplots(1, **kwargs)
         elif ax is None:
             ax = fig.gca()
 
