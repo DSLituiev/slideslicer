@@ -116,8 +116,6 @@ def get_vertices(region):
 
 # ## functions for rotating, slicing, and stitching the picture
 
-
-
 # delete ? 
 def map_countour_bbox(contour, slide_dimensions,
                      SUBSAMPLE_RATE=8):
@@ -134,9 +132,9 @@ def map_countour_bbox(contour, slide_dimensions,
 
     # xminf*slide.dimensions[1]
     ymin_hr = int(round(yminf*slide_dimensions[1]))
-    xmin_hr =  int(round(xminf*slide_dimensions[0]))
+    xmin_hr = int(round(xminf*slide_dimensions[0]))
     ymax_hr = int(round(ymaxf*slide_dimensions[1]))
-    xmax_hr =  int(round(xmaxf*slide_dimensions[0]))
+    xmax_hr = int(round(xmaxf*slide_dimensions[0]))
     
     ytot_hr = ymax_hr - ymin_hr
     xtot_hr = xmax_hr - xmin_hr
