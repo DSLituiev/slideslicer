@@ -123,10 +123,12 @@ class RoiReader():
         contours = get_contours_from_mask(mask, minlen=minlen)
 
 
-        sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] for roi in self.rois])
+        sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] 
+                                        for roi in self.rois])
 
-        self.tissue_rois = [get_roi_dict(cc*self._thumbnail_ratio, name='tissue', id=1+nn+len(self.rois),
-                                         sq_micron_per_pixel=sq_micron_per_pixel) 
+        self.tissue_rois = [get_roi_dict(cc*self._thumbnail_ratio,
+                                        name='tissue', id=1+nn+len(self.rois),
+                                        sq_micron_per_pixel=sq_micron_per_pixel) 
                             for nn,cc in enumerate(contours)]
         return self.tissue_rois 
 
@@ -141,7 +143,8 @@ class RoiReader():
 
         if self.verbose:
             print("counts of roi names")
-            roi_name_counts = pd.Series([rr["name"] for rr in self.rois]).value_counts()
+            roi_name_counts = (pd.Series([rr["name"] for rr in self.rois])
+                              .value_counts() )
             print(roi_name_counts)
         
         if remove_empty:
