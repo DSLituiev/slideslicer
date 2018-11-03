@@ -7,6 +7,7 @@ import json
 import openslide
 import numpy as np
 import pandas as pd
+from PIL import Image
 from collections import Counter
 from bs4 import BeautifulSoup
 #import cv2
@@ -59,6 +60,26 @@ def remove_empty_tissue_chunks(roilist):
     empty_chunks = set([kk for kk,vv in chunk_content.items() if len(vv)==0])
     return [roi for roi in roilist if roi['id'] not in empty_chunks]
 
+def get_patch(slide, xc, yc,
+              patch_size = [1024, 1024],
+              magn_base = 4,
+              target_subsample = 2,
+             ):
+    target_subsample = max(target_subsample, 1/target_subsample)
+    exp_raw = np.log2(target_subsample)/np.log2(magn_base)
+    magn_exp = int(np.floor(exp_raw))
+    subsample = magn_base**-(exp_raw-magn_exp)
+#     print(magn_exp, subsample,)
+
+    size_ = [ps//(magn_base**magn_exp) for ps in patch_size]
+    region_ = slide.read_region((int(xc-patch_size[1]//2), int(yc-patch_size[0]//2)), magn_exp, size_)
+    if subsample!= 1.0:
+        region_ = region_.resize( [int(subsample * s) for s in region_.size], Image.ANTIALIAS)
+        #region_ = np.asarray(region_)[...,:3]
+        #region_ = cv2.resize(region_, (0,0), fx=subsample, fy=subsample,
+        #                        interpolation = cv2.INTER_AREA)
+    return region_
+
 
 class RoiReader():
     """ROI reader for Leica SVS slides
@@ -105,7 +126,6 @@ class RoiReader():
         self.median_color = get_median_color(slide)
         self._thumbnail_ratio = get_thumbnail_magnification(slide)
         return self.img
-
 
     @property
     def slide(self):
@@ -157,7 +177,70 @@ class RoiReader():
 
     @property
     def df(self):
-        return pd.DataFrame(self.rois)
+        if hasattr(self, '_df'):
+            return self._df
+        else:
+            self._df = pd.DataFrame(self.rois)
+            self._df['polygon'] = self._df['vertices'].map(Polygon)
+
+    def get_patch_rois(self, xc, yc, patch_size, target_subsample=1,
+                       translate=True, scale=True):
+        from shapely import affinity
+        if isinstance(patch_size, int):
+            patch_size = [patch_size]*2
+        patch_size = [x  for x in patch_size]
+        patch = Polygon(
+                [(xc - patch_size[0]/2, yc - patch_size[1]/2),
+                 (xc - patch_size[0]/2, yc + patch_size[1]/2),
+                 (xc + patch_size[0]/2, yc + patch_size[1]/2),
+                 (xc + patch_size[0]/2, yc - patch_size[1]/2),
+                ])
+        mask = self.df['polygon'].map(lambda x: patch.intersects(x))
+        df = self.df[mask].copy()
+        df.loc[:,'polygon'] = df['polygon'].map(lambda x: patch & x)
+        if translate:
+            def shift(x):
+                return affinity.translate(x, -patch.bounds[0], -patch.bounds[1])
+            df.loc[:,'polygon'] = df['polygon'].map(shift)
+        if scale:
+            def scale_(x):
+                origin = (0,0) if translate else 'center'
+                return affinity.scale(x, 1/target_subsample, 1/target_subsample, origin=origin)
+            df.loc[:,'polygon'] = df['polygon'].map(scale_)
+        df.loc[:,'vertices'] = df['polygon'].map(lambda p: np.asarray(p.boundary.coords.xy).T.tolist())
+        df.loc[:,'area'] = df['polygon'].map(lambda p: p.area)
+        return df
+
+
+    def get_patch(self, xc, yc, patch_size, target_subsample=1,
+                  magn_base = 4,):
+        if isinstance(patch_size, int):
+            patch_size = [patch_size]*2
+
+        patch = get_patch(self.slide, xc, yc,
+                          patch_size = patch_size,
+                          magn_base = magn_base,
+                          target_subsample = target_subsample)
+        return patch    
+
+
+    def plot_patch(self, xc, yc, patch_size, target_subsample=1,
+                   magn_base = 4, **kwargs):
+        patch = self.get_patch(xc, yc, patch_size, target_subsample=target_subsample,
+                               magn_base = magn_base,)
+        prois = self.get_patch_rois(xc, yc, patch_size,
+                                    target_subsample=target_subsample,)
+        import matplotlib.pyplot as plt
+        from descartes import PolygonPatch
+        fig, ax = plt.subplots(1, **kwargs)
+        ax.imshow(patch)
+        for _, pp_ in prois.iterrows():
+            print(pp_['name'])
+            pp = pp_.polygon
+            ax.add_patch(PolygonPatch(pp, fc=(0,1,0,0.05), ec=(0,1,0,1), lw=2))
+        ax.relim()
+        ax.autoscale_view()
+        return fig, ax, patch, prois
 
 
     def plot(self, fig=None, ax=None, labels=True, **kwargs):
