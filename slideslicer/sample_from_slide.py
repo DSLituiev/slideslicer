@@ -17,9 +17,9 @@ from slideutils import (plot_contour, get_median_color,
                         get_thumbnail_magnification,
                         get_img_bbox, get_rotated_highres_roi,
                         get_uniform_tiles, 
-                        get_chunk_masks, 
-                        get_roi_mask,
-                        get_contours_from_mask,
+                        get_threshold_tissue_mask, 
+                        convert_contour2mask,
+                        convert_mask2contour,
                         CropRotateRoi,
                        get_contour_centre, read_roi_patches_from_slide,
                        clip_roi_wi_bbox, sample_points_wi_contour)
@@ -199,7 +199,7 @@ def add_roi_bytes(rois, reg,
         if roi_["name"] == "tissue":
             tissue_roi = roi_
             continue
-        mask_ = get_roi_mask(roi_["vertices"], reg.shape[1], reg.shape[0],
+        mask_ = convert_contour2mask(roi_["vertices"], reg.shape[1], reg.shape[0],
                              fill=1, order='F')
 
         cocomask = encode(np.asarray(mask_, dtype='uint8'))
@@ -213,14 +213,14 @@ def add_roi_bytes(rois, reg,
         if roi_ is None:
             print("Someting strange is going on. Make sure no tissue chunks are missing")
         if reg is not None:
-            mask_ = get_chunk_masks(reg, color=True, filtersize=filtersize, dtype=bool,
+            mask_ = get_threshold_tissue_mask(reg, color=True, filtersize=filtersize, dtype=bool,
                                     open=open, close=close,
                                     lower = lower, upper = upper)
             if mask_.sum()==0:
                 roi_ = None
                 print("skipping empty mask", roi_['name'], roi_['id'])
                 continue
-            verts = get_contours_from_mask(mask_.astype('uint8'), minlen=minlen)
+            verts = convert_mask2contour(mask_.astype('uint8'), minlen=minlen)
             # print("verts", len(verts))
             if len(verts)>0:
                 roi_["vertices"] = verts[np.argmax(map(len,verts))]
@@ -229,7 +229,7 @@ def add_roi_bytes(rois, reg,
                 pass
             mask_ = np.asarray(mask_, order='F')
         else:
-            mask_ = get_roi_mask(roi_["vertices"], reg.shape[1], reg.shape[0], 
+            mask_ = convert_contour2mask(roi_["vertices"], reg.shape[1], reg.shape[0], 
                                  fill=1, order='F')
             if mask_.sum()==0:
                 roi_ = None

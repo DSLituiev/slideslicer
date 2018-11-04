@@ -159,7 +159,7 @@ def get_median_color(slide):
                               [0,1]).ravel()
 
 #rename: get_threshold_tissue_mask()
-def get_chunk_masks(img, color=False, filtersize=7,
+def get_threshold_tissue_mask(img, color=False, filtersize=7,
                    lower = [0, 0, 180],
                    upper = [179, 20, 255],
                      close=True,
@@ -223,10 +223,10 @@ def get_roi_dict(contour, name='tissue', id=0, sq_micron_per_pixel=None):
         cdict['areamicrons'] = cdict['area'] * sq_micron_per_pixel
     return cdict
 
-# rename to : convert_verts2mask / convert_contour2mask
-def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C'):
+# rename to : convert_contour2mask
+def convert_contour2mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C'):
     """
-    get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C')
+    convert_contour2mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C')
     """
     img = Image.new('L', (width, height), 0)
     if len(roi)>1 and shape=='polygon':# roi.shape[0]>1:
@@ -241,8 +241,8 @@ def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 
     return mask
 
 
-# merge with get_roi_mask/ convert_contour2mask
-def get_region_mask(vertices, start_xy, size_xy, color=(1)):
+# merge with convert_contour2mask
+def get_region_mask(vertices, start_xy=0, size_xy=0, color=(1)):
     vertices = shift_vertices(vertices, start_xy, size_xy)
     mask = cv2.fillPoly(np.zeros(size_xy[::-1]),
                         pts =[ vertices ],
@@ -250,8 +250,8 @@ def get_region_mask(vertices, start_xy, size_xy, color=(1)):
     return mask, vertices
 
 
-# rename convert_mask2verts / convert_mask2contour
-def get_contours_from_mask(mask, minlen = 50):
+# rename convert_mask2contour
+def convert_mask2contour(mask, minlen = 50):
     im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
     if minlen is not None:
@@ -260,8 +260,8 @@ def get_contours_from_mask(mask, minlen = 50):
 
 
 def get_chunk_countours(img, color=False, filtersize=7, minlen = 100):
-    mask = get_chunk_masks(img, color=color, filtersize=filtersize)
-    contours = get_contours_from_mask(mask, minlen = minlen)
+    mask = get_threshold_tissue_mask(img, color=color, filtersize=filtersize)
+    contours = convert_mask2contour(mask, minlen = minlen)
     return contours
 
 
@@ -271,6 +271,7 @@ def get_thumbnail_magnification(slide):
     ratio = np.asarray(slide.dimensions) / np.asarray(slide.associated_images["thumbnail"].size)
      # np.sqrt(np.prod(ratio))
     return ratio
+
 
 def roi_loc(roi):
     xmin, ymin = roi.min(0)
@@ -460,8 +461,8 @@ def get_rotated_highres_roi(slide, chunkroi_small,
             print(rr["name"])
             rois_within_chunk.append(rr)
     # re-estimate the contour
-    mask_ = get_chunk_masks(region_, color=color, filtersize=filtersize)
-    chunkroi_large_refined = get_contours_from_mask(mask_, minlen = minlen)
+    mask_ = get_threshold_tissue_mask(region_, color=color, filtersize=filtersize)
+    chunkroi_large_refined = convert_mask2contour(mask_, minlen = minlen)
     assert len(chunkroi_large_refined)>0
     # take the longest contour
     maxidx = np.argmax([len(x) for x in chunkroi_large_refined])

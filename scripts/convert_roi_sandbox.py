@@ -50,7 +50,7 @@ import numpy as np
 
 #cell#
 
-def get_roi_mask(roi, width, height, fill=1, shape='polygon', radius=3):
+def convert_contour2mask(roi, width, height, fill=1, shape='polygon', radius=3):
     img = Image.new('L', (width, height), 0)
     if len(roi)>1 and shape=='polygon':# roi.shape[0]>1:
         roi = [tuple(x) for x in roi]
@@ -110,7 +110,7 @@ def get_median_color(slide):
 
 #cell#
 
-def get_chunk_masks(img, color=False, filtersize=7,
+def get_threshold_tissue_mask(img, color=False, filtersize=7,
                    lower = [0, 0, 180],
                    upper = [179, 20, 255]):
     
@@ -129,7 +129,7 @@ def get_chunk_masks(img, color=False, filtersize=7,
         ret3, mask = cv2.threshold(blur,0,1,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     return (~mask.astype(bool)).astype('uint8')
 
-def get_contours_from_mask(mask, minlen = 50):
+def convert_mask2contour(mask, minlen = 50):
     im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
     if minlen is not None:
@@ -137,8 +137,8 @@ def get_contours_from_mask(mask, minlen = 50):
     return contours
 
 def get_chunk_countours(img, color=False, filtersize=7, minlen = 100):
-    mask = get_chunk_masks(img, color=color, filtersize=filtersize)
-    contours = get_contours_from_mask(mask, minlen = minlen)
+    mask = get_threshold_tissue_mask(img, color=color, filtersize=filtersize)
+    contours = convert_mask2contour(mask, minlen = minlen)
     return contours
 
 #cell#
@@ -335,8 +335,8 @@ def get_rotated_highres_roi(slide, chunkroi_small,
             print(rr["name"])
             rois_within_chunk.append(rr)
     # re-estimate the contour
-    mask_ = get_chunk_masks(region_, color=color, filtersize=filtersize)
-    chunkroi_large_refined = get_contours_from_mask(mask_, minlen = minlen)
+    mask_ = get_threshold_tissue_mask(region_, color=color, filtersize=filtersize)
+    chunkroi_large_refined = convert_mask2contour(mask_, minlen = minlen)
     assert len(chunkroi_large_refined)>0
     # take the longest contour
     maxidx = np.argmax([len(x) for x in chunkroi_large_refined])
@@ -459,8 +459,8 @@ if __name__ == '__main__':
 
 #cell#
 
-    mask = get_chunk_masks(img, color=False, filtersize=7)
-    contours = get_contours_from_mask(mask, minlen = 100)
+    mask = get_threshold_tissue_mask(img, color=False, filtersize=7)
+    contours = convert_mask2contour(mask, minlen = 100)
 
 #cell#
 
@@ -503,7 +503,7 @@ if __name__ == '__main__':
 #cell#
 
     height, width, _ = img.shape
-# objmask = get_roi_mask(co, width, height, fill=1, shape='polygon', radius=3)
+# objmask = convert_contour2mask(co, width, height, fill=1, shape='polygon', radius=3)
 
 # # Rotating, slicing, and stitching the picture
 # ## crop and rotate the image and a chunk roi

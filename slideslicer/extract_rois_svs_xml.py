@@ -16,7 +16,7 @@ from shapely.geometry import Polygon
 from parse_leica_xml import parse_xml2annotations
 
 from slideutils import (get_vertices, get_roi_dict, get_median_color,
-                        get_chunk_masks, get_contours_from_mask,
+                        get_threshold_tissue_mask, convert_mask2contour,
                         get_thumbnail_magnification)
 
 ## Read XML ROI, convert, and save as JSON
@@ -69,7 +69,6 @@ def get_patch(slide, xc, yc,
     exp_raw = np.log2(target_subsample)/np.log2(magn_base)
     magn_exp = int(np.floor(exp_raw))
     subsample = magn_base**-(exp_raw-magn_exp)
-#     print(magn_exp, subsample,)
 
     size_ = [ps//(magn_base**magn_exp) for ps in patch_size]
     region_ = slide.read_region((int(xc-patch_size[1]//2), int(yc-patch_size[0]//2)), magn_exp, size_)
@@ -118,6 +117,9 @@ class RoiReader():
         if save:
             self.save()
 
+    @property 
+    def thumbnail(self):
+        return load_thumbnail(self)
 
     def load_thumbnail(self):
         slide = self.slide
@@ -139,8 +141,8 @@ class RoiReader():
         self.load_thumbnail()
 
         ## Extract mask and contours
-        mask = get_chunk_masks(self.img, color=color, filtersize=filtersize)
-        contours = get_contours_from_mask(mask, minlen=minlen)
+        mask = get_threshold_tissue_mask(self.img, color=color, filtersize=filtersize)
+        contours = convert_mask2contour(mask, minlen=minlen)
 
 
         sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] 
@@ -177,11 +179,10 @@ class RoiReader():
 
     @property
     def df(self):
-        if hasattr(self, '_df'):
-            return self._df
-        else:
+        if not hasattr(self, '_df'):
             self._df = pd.DataFrame(self.rois)
             self._df['polygon'] = self._df['vertices'].map(Polygon)
+        return self._df
 
     def get_patch_rois(self, xc, yc, patch_size, target_subsample=1,
                        translate=True, scale=True):
@@ -404,8 +405,8 @@ def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, minlen=50, keepl
     median_color = get_median_color(slide)
 
     ## Extract mask and contours
-    mask = get_chunk_masks(img, color=False, filtersize=7)
-    contours = get_contours_from_mask(mask, minlen = minlen)
+    mask = get_threshold_tissue_mask(img, color=False, filtersize=7)
+    contours = convert_mask2contour(mask, minlen = minlen)
 
     ratio = get_thumbnail_magnification(slide)
 

@@ -17,9 +17,9 @@ from extract_rois_svs_xml import extract_rois_svs_xml
 from slideutils import (plot_contour, get_median_color, get_thumbnail_magnification,
                        CropRotateRoi, get_img_bbox, get_rotated_highres_roi, get_uniform_tiles,
                        get_contour_centre, read_roi_patches_from_slide,
-                       get_contours_from_mask, get_roi_dict,
+                       convert_mask2contour, get_roi_dict,
                        clip_roi_wi_bbox, sample_points_wi_contour,
-                       get_roi_mask)
+                       convert_contour2mask)
 from sample_from_slide import get_tissue_rois
 
 
@@ -74,7 +74,7 @@ def convert_roi_to_coco(roi, image_id, mask_id, img_size=None, rle=False,
     cocoroi['id'] = mask_id
 
     if rle:
-        mask_ = get_roi_mask(roi["vertices"], img_size[0], img_size[1], fill=1, order='F')
+        mask_ = convert_contour2mask(roi["vertices"], img_size[0], img_size[1], fill=1, order='F')
         cocomask = encode(np.asarray(mask_, dtype='uint8'))
         cocomask["counts"] =  cocomask["counts"].decode('utf-8')
         for kk,vv in cocomask.items():
@@ -136,7 +136,7 @@ if __name__ == '__main__':
       help='The XML file for ROI.')
 
     parser.add_argument(
-      '--data-root',
+      '--out-root',
       type=str,
       default='/repos/data/coco/gloms/img_level2_rle/',
       help='The directory where the MSCOCO-formatted data will be stored.')
@@ -236,7 +236,7 @@ if __name__ == '__main__':
 
     magnification = 4**prms.magnlevel
     target_side_magn = prms.target_side*magnification
-    IMGDIR = prms.data_root 
+    IMGDIR = prms.out_root 
     #"/repos/data/coco/gloms/img_level2/"
     ANNDIR = IMGDIR
 
