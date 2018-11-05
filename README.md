@@ -33,6 +33,7 @@ These MS-COCO JSON masks can be converted to one-hot [ height x width x classes]
 
 ## Functions
 
+See [demo](notebooks/demo-read-slide.ipynb)
 
 ## Pipeline
 
