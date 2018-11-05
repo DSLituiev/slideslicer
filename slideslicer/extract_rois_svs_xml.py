@@ -232,13 +232,23 @@ class RoiReader():
         prois = self.get_patch_rois(xc, yc, patch_size,
                                     target_subsample=target_subsample,)
         import matplotlib.pyplot as plt
+        from matplotlib import colors
         from descartes import PolygonPatch
+        from itertools import cycle
+
+        ccycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        ccycle = cycle(ccycle)
         fig, ax = plt.subplots(1, **kwargs)
         ax.imshow(patch)
-        for _, pp_ in prois.iterrows():
-            print(pp_['name'])
-            pp = pp_.polygon
-            ax.add_patch(PolygonPatch(pp, fc=(0,1,0,0.05), ec=(0,1,0,1), lw=2))
+        for name_, gg in prois.groupby('name'):
+            c = next(ccycle)
+            for _, pp_ in gg.iterrows():
+                print(pp_['name'])
+                pp = pp_.polygon
+                fc = list(colors.to_rgba(c))
+                ec = list(colors.to_rgba(c))
+                fc[-1] = 0.1
+                ax.add_patch(PolygonPatch(pp, fc=fc, ec=ec, lw=2))
         ax.relim()
         ax.autoscale_view()
         return fig, ax, patch, prois

@@ -16,6 +16,9 @@ import cv2
 import numpy as np
 from warnings import warn
 from shapely.geometry import Polygon, MultiPolygon, MultiLineString, LineString
+from shapely.geometry import Point, MultiPoint, asMultiPoint, box
+from shapely.affinity import rotate
+
 
 
 def clean_polygon(pp):
@@ -344,7 +347,6 @@ class CropRotateRoi():
         if angle is not None:
             angle_ = angle
         
-        box = cv2.boxPoints((xdim, ydim, angle_)) 
         box = cv2.boxPoints((center, sz, angle_))
         xmin, ymin = box.min(0)
         xmax, ymax = box.max(0)
@@ -736,3 +738,115 @@ def plot_contour(roi, ax=None, name = None, fontsize=12, **kwargs):
     return line
 
 
+
+class CentredRectangle(Polygon):
+    def __init__(self, xc, yc, w, h):
+        halfw = w/2
+        halfh = h/2
+        super(CentredRectangle, self).__init__(
+                [(xc - halfw, yc - halfh),
+                 (xc - halfw, yc + halfh),
+                 (xc + halfw, yc + halfh),
+                 (xc + halfw, yc - halfh),
+                ]
+        )
+        return
+
+def simulate_sampling(points, size, n=None):
+    '''returns rectangles of given size sampled with centres at given by points'''
+    if isinstance(size, int):
+        w = h = size
+    else:
+        w, h = size
+    return MultiPolygon([CentredRectangle(*np.asarray(p.centroid).tolist(), w,h) for p in points[:n]])
+
+
+def sample_grid(w,h, n_points=None, spacing=None, angle=None):
+    if (n_points is None) and (spacing is None):
+        raise ValueError('either `spacing` or `n_points` must be specified')
+    ar = w/h
+    
+    if spacing is not None:
+        w_ = h_ = spacing
+#         n_w = int(np.round(w/dw))
+#         n_h = int(np.round(h/dh))
+#         if angle:
+#             dw *= np.cos(angle)
+#         if angle:
+#             fh =  -np.sin(angle)
+#             fw = (np.cos(angle))
+#         else:
+#             fh = 1.0
+# #             fw = 1.0
+        
+#         print('fh', fh)
+#         print('h_/fh', h_/fh)
+#         print('fw', fw)
+#         print('w_/fw', w_/fw)
+        xs = np.arange(0, w, int(w_))
+        ys = np.arange(0, h, int(h_))
+        n_w = len(xs)
+        n_h = len(ys)
+    elif (n_points is not None):
+        n_w = int(np.round(np.sqrt( n_points * ar)))
+        n_h = int(np.round(np.sqrt( n_points/ ar) ))
+        print(n_w, n_h)
+        xs = np.linspace(0, w, n_w)
+        ys = np.linspace(0, h, n_h)
+        w_ = w/n_w
+        h_ = h/n_h
+        
+    X, Y = np.meshgrid(xs, ys)
+    
+    if angle:
+        rot = np.asarray([[np.cos(angle), -np.sin(angle)],
+                   [np.sin(angle), np.cos(angle)]])
+        dw =  w_ *(1-np.cos(angle))
+        dh =  w_ * np.sin(angle)
+#         fh =  np.sin(angle)
+        X =  np.mod(dw * np.arange(n_h), w_)[..., np.newaxis,] + X
+#         Y =  fh * Y
+#     print('X', X.shape, 'Y', Y.shape)
+    points = np.c_[X.ravel(), Y.ravel()]
+    return points
+
+def sample_points(cnt, n_points=None, spacing=None, 
+                  mode='uniform_random', random_seed=None):
+    '''efficiently sample point within an oblong contour'''
+    if (n_points is None) and (spacing is None):
+        raise ValueError('either `spacing` or `n_points` must be specified')
+    
+    if isinstance(cnt, Polygon):
+        pg = cnt
+    else:
+        pg = Polygon(cnt)
+    center, sz, angle_ = cv2.minAreaRect(np.asarray(pg.boundary, dtype=int))
+    w, h = sz
+    
+    if n_points is None:
+        n_points = h*w/spacing**2 
+    
+    pg_rot = rotate(pg, -angle_)
+    x0,y0, x1, y1 = pg_rot.bounds
+    
+    # calculate area ratio and increment number of sampled points accordingly
+    area_ratio = pg_rot.area/Polygon([(x0,y0), (x0,y1), (x1,y1), (x1, y0)]).area
+    n_points = int(np.ceil(n_points/area_ratio))
+    
+    if mode == 'grid':
+        points_rot = sample_grid(w,h, n_points=n_points, spacing=spacing, angle=angle_)
+        
+        points_rot = points_rot + np.r_[x0, y0]
+    elif mode == 'rotated_grid':
+        points_rot = sample_grid(w,h, n_points=n_points, spacing=spacing)
+        points_rot = points_rot + np.r_[x0, y0]
+    elif mode == 'uniform_random':
+        np.random.seed(random_seed)
+        points_rot = np.random.rand(n_points, 2,) * np.r_[w, h] + np.r_[x0, y0]
+    else:
+        raise ValueError('unknown mode:%s' % mode)
+        
+    points_rot = MultiPoint(asMultiPoint(points_rot))
+    points_rot = points_rot.intersection(pg_rot)
+    points = rotate(points_rot, angle_)
+    return points
