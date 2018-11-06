@@ -1,1 +1,6 @@
 pycocotools
+Shapely>=1.6.4
+pandas>=0.23
+opencv>=3.4.3
+lxml>==4.1
+-e git+https://github.com/openslide/openslide-python@4ea9211e10e9fc58d04bac909d73a2448c4a44ff#egg=openslide_python
