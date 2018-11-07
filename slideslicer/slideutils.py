@@ -687,42 +687,6 @@ def rectangle_intersection(a,b):
     if w<0 or h<0: return None
     return (x, y, w, h)
 
-def sample_points_wi_contour(contour,
-                         step = 200,
-                         shift = 0,
-                         factor = 10,
-                         random=False):
-    """
-    sample points within a roi
-
-    Inputs:
-    roi: roi clip 
-    step
-    random: generates random uniform sample; otherwise grid
-    """
-    # get bounding box of the roi
-    contour = np.asarray(contour).astype('int32')
-    x0, y0, w, h = cv2.boundingRect(contour)
-    dimensions = [w, h]
-
-    # sample
-    if random:
-        npoints = np.prod(dimensions) / (step**2)
-        npoints = int(npoints)
-        points = (np.asarray(dimensions)*np.random.rand(*(int(npoints), 2))).astype(int)
-    else:
-        x_ = np.arange(shift, dimensions[0], step)
-        y_ = np.arange(shift, dimensions[1], step)
-        x_,y_ = np.meshgrid(x_,y_)
-        points = np.vstack([x_.ravel(), y_.ravel()]).T
-    # shift to the start of bbox
-    points += np.r_[x0, y0]
-    # binary mask for clipping
-    flag_points = np.asarray(
-            [cv2.pointPolygonTest(contour, tuple(pp), False) for pp in points])>0
-    # clip
-    points = points[flag_points]#[inds,:]
-    return points
 
 
 def plot_contour(roi, ax=None, name = None, fontsize=12, **kwargs):
@@ -752,7 +716,7 @@ class CentredRectangle(Polygon):
         )
         return
 
-def simulate_sampling(points, size, n=None):
+def simulate_patch_sampling(points, size, n=None):
     '''returns rectangles of given size sampled with centres at given by points'''
     if isinstance(size, int):
         w = h = size
@@ -790,7 +754,7 @@ def sample_grid(w,h, n_points=None, spacing=None, angle=None):
     elif (n_points is not None):
         n_w = int(np.round(np.sqrt( n_points * ar)))
         n_h = int(np.round(np.sqrt( n_points/ ar) ))
-        print(n_w, n_h)
+        #print(n_w, n_h)
         xs = np.linspace(0, w, n_w)
         ys = np.linspace(0, h, n_h)
         w_ = w/n_w
@@ -803,16 +767,27 @@ def sample_grid(w,h, n_points=None, spacing=None, angle=None):
                    [np.sin(angle), np.cos(angle)]])
         dw =  w_ *(1-np.cos(angle))
         dh =  w_ * np.sin(angle)
-#         fh =  np.sin(angle)
         X =  np.mod(dw * np.arange(n_h), w_)[..., np.newaxis,] + X
-#         Y =  fh * Y
-#     print('X', X.shape, 'Y', Y.shape)
     points = np.c_[X.ravel(), Y.ravel()]
     return points
 
-def sample_points(cnt, n_points=None, spacing=None, 
+
+def intersect_contour_points(contour, points):
+    '''select points within a contour'''
+    contour = np.asarray(contour, dtype=int)
+    # binary mask for clipping
+    mask = np.asarray(
+            [cv2.pointPolygonTest(contour, tuple(pp), False) for pp in points])>0
+    # clip
+    points = points[mask]
+    return points
+
+
+def _sample_points_(cnt, n_points=None, spacing=None, 
                   mode='uniform_random', random_seed=None):
-    '''efficiently sample point within an oblong contour'''
+    '''sample point within an oblong contour with shapely
+    [deprecated]
+    '''
     if (n_points is None) and (spacing is None):
         raise ValueError('either `spacing` or `n_points` must be specified')
     
@@ -820,6 +795,7 @@ def sample_points(cnt, n_points=None, spacing=None,
         pg = cnt
     else:
         pg = Polygon(cnt)
+
     center, sz, angle_ = cv2.minAreaRect(np.asarray(pg.boundary, dtype=int))
     w, h = sz
     
@@ -827,7 +803,7 @@ def sample_points(cnt, n_points=None, spacing=None,
         n_points = h*w/spacing**2 
     
     pg_rot = rotate(pg, -angle_)
-    x0,y0, x1, y1 = pg_rot.bounds
+    x0, y0, x1, y1 = pg_rot.bounds
     
     # calculate area ratio and increment number of sampled points accordingly
     area_ratio = pg_rot.area/Polygon([(x0,y0), (x0,y1), (x1,y1), (x1, y0)]).area
@@ -835,7 +811,6 @@ def sample_points(cnt, n_points=None, spacing=None,
     
     if mode == 'grid':
         points_rot = sample_grid(w,h, n_points=n_points, spacing=spacing, angle=angle_)
-        
         points_rot = points_rot + np.r_[x0, y0]
     elif mode == 'rotated_grid':
         points_rot = sample_grid(w,h, n_points=n_points, spacing=spacing)
@@ -849,4 +824,93 @@ def sample_points(cnt, n_points=None, spacing=None,
     points_rot = MultiPoint(asMultiPoint(points_rot))
     points_rot = points_rot.intersection(pg_rot)
     points = rotate(points_rot, angle_)
+    return points
+
+
+def sample_points(contour,
+                  n_points=None,
+                  spacing=200,
+                  shift=0,
+                  mode='grid',
+                  random_seed=None):
+    """
+    sample points within a roi
+
+    Inputs:
+    contour
+    n_points
+    spacing
+    shift
+    random: generates random uniform sample; otherwise grid
+    """
+    if (n_points is None) and (spacing is None):
+        raise ValueError('either `spacing` or `n_points` must be specified')
+    # get bounding box of the roi
+    if isinstance(contour, Polygon):
+        contour = contour.boundary
+    contour = np.asarray(contour).astype('int32')
+    x0, y0, w, h = cv2.boundingRect(contour)
+    dimensions = np.r_[w, h]
+
+    if n_points is not None:
+        # calculate ratio of contour and bounding box areas 
+        # and increment number of sampled points accordingly
+        contour_area = cv2.contourArea(contour)
+        area_ratio = contour_area/(w*h)
+        n_points = int(np.ceil(n_points/area_ratio))
+        #ar = w/h
+        #n_w = int(np.round(np.sqrt( n_points * ar)))
+        #n_h = int(np.round(np.sqrt( n_points/ ar) ))
+        spacing = int(np.round(np.sqrt(h*w / n_points)))
+
+    # sample
+    if mode == 'grid':
+        x_ = np.arange(shift, w, spacing)
+        y_ = np.arange(shift, h, spacing)
+        x_,y_ = np.meshgrid(x_,y_)
+        points = np.vstack([x_.ravel(), y_.ravel()]).T
+        # shift to the start of bbox
+        points += np.r_[x0, y0]
+    elif mode == 'rotated_grid':
+        # find tightest rotated bounding box
+        center, sz, angle_ = cv2.minAreaRect(contour.astype(int))
+        wrot, hrot = sz
+        rot_matr = cv2.getRotationMatrix2D(center, angle_,1)
+        inv_rot_matr = cv2.getRotationMatrix2D(center, -angle_,1)
+        # rotate the contour
+        contour_rot = cv2.transform(np.asarray([contour]), rot_matr)[0]
+        x0, y0, x1, y1 = cv2.boundingRect(contour_rot.astype(int))
+        contour_rot = (contour_rot - np.r_[x0, y0])
+        # sample points within the rotated rectange
+        points_rot = sample_grid(wrot, hrot, spacing=spacing)
+        points_rot = np.r_[x0, y0] + intersect_contour_points(contour_rot.astype(int), points_rot)
+        # rotate back
+        points = cv2.transform(np.asarray([points_rot]), inv_rot_matr)[0]
+    elif mode == 'uniform_random':
+        # find tightest rotated bounding box
+        center, sz, angle_ = cv2.minAreaRect(contour.astype(int))
+        wrot, hrot = sz
+        rot_matr = cv2.getRotationMatrix2D(center, angle_,1)
+        inv_rot_matr = cv2.getRotationMatrix2D(center, -angle_,1)
+        # rotate the contour
+        contour_rot = cv2.transform(np.asarray([contour]), rot_matr)[0]
+        x0, y0, x1, y1 = cv2.boundingRect(contour_rot.astype(int))
+        contour_rot = (contour_rot - np.r_[x0, y0])
+        # sample points within the rotated rectange
+        if random_seed is not None:
+            np.random.seed(random_seed)
+        if n_points is None:
+            n_points = np.prod(sz) / (spacing**2)
+        points_rot = (np.asarray(sz)*np.random.rand(*(int(n_points), 2))).astype(int)
+        points_rot = np.r_[x0, y0] + intersect_contour_points(contour_rot.astype(int), points_rot)
+        # rotate back
+        points = cv2.transform(np.asarray([points_rot]), inv_rot_matr)[0]
+    else:
+        raise ValueError('unknown mode:%s' % mode)
+
+    # binary mask for clipping
+    mask = np.asarray(
+            [cv2.pointPolygonTest(contour, tuple(pp), False) for pp in points])>0
+    # clip
+    points = points[mask]
     return points

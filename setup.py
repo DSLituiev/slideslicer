@@ -11,8 +11,9 @@ setup(
     long_description=open('README.md').read(),
     install_requires=['openslide_python', 'Pillow>=5.0.0', 'pycocotools',
                       'shapely', 'opencv-python', 'beautifulsoup4>=4.6.0',
-                      'scikit-image>=0.14.1', # used solely in slideslicer/hsv_histeq.py
-                      'matplotlib','numpy','pandas', ],
+                      'scikit-image>=0.14.1', # used solely in hsv_histeq.py
+                      'descartes',
+                      'matplotlib','numpy','pandas', 'lxml'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: BSDv2",
