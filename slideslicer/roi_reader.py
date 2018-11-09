@@ -5,8 +5,11 @@ import pandas as pd
 import openslide
 import shapely
 from shapely.geometry import Polygon
+from descartes import PolygonPatch
 import matplotlib.pyplot as plt
+from matplotlib import colors
 from itertools import cycle
+from warnings import warn
 from .slideutils import (get_vertices, get_roi_dict, get_median_color,
                         get_threshold_tissue_mask, convert_mask2contour,
                         get_thumbnail_magnification, plot_contour)
@@ -100,9 +103,12 @@ class RoiReader():
         self.slide_format = slide_format
         if annotation_format == 'leica':
             fnxml = self.filenamebase + '.xml'
-            self.rois = parse_xml2annotations(fnxml)
-            for roi in self.rois:
-                roi["name"] = roi.pop("text").lower().rstrip('.')
+            try:
+                self.rois = parse_xml2annotations(fnxml)
+                for roi in self.rois:
+                    roi["name"] = roi.pop("text").lower().rstrip('.')
+            except:
+                warn('ROI file not found; (supposedly "{}")'.format(fnxml))
         else:
             NotImplementedError('format "%s" is not supported yet' % annotation_format)
             
@@ -238,10 +244,14 @@ class RoiReader():
                                magn_base = magn_base,)
         prois = self.get_patch_rois(xc, yc, patch_size,
                                     target_subsample=target_subsample,)
-        import matplotlib.pyplot as plt
-        from matplotlib import colors
-        from descartes import PolygonPatch
-        from itertools import cycle
+
+        if fig is None:
+            if ax is not None:
+                fig = ax.get_figure()
+            else:
+                fig, ax = plt.subplots(1, **kwargs)
+        elif ax is None:
+            ax = fig.gca()
 
         ccycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
         ccycle = cycle(ccycle)
