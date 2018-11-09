@@ -12,8 +12,8 @@ import openslide
 import cv2
 from pycocotools.mask import encode, decode
 
-from extract_rois_svs_xml import extract_rois_svs_xml
-from slideutils import (plot_contour, get_median_color, 
+from slideslicer.extract_rois_svs_xml import extract_rois_svs_xml
+from slideslicer.slideutils import (plot_contour, get_median_color, 
                         get_thumbnail_magnification,
                         get_img_bbox, get_rotated_highres_roi,
                         get_uniform_tiles, 
@@ -21,8 +21,8 @@ from slideutils import (plot_contour, get_median_color,
                         convert_contour2mask,
                         convert_mask2contour,
                         CropRotateRoi,
-                       get_contour_centre, read_roi_patches_from_slide,
-                       clip_roi_wi_bbox, sample_points_wi_contour)
+                        get_contour_centre, read_roi_patches_from_slide,
+                        clip_roi_wi_bbox, sample_points)
 
 
 def get_img_id(svsname):
@@ -120,10 +120,10 @@ def get_tissue_rois(slide,
     for roi in tissue_rois:
         print("id", roi["id"])
         cont = roi["vertices"]
-        points = sample_points_wi_contour(cont,
-                                      step = step,
-                                      shift = -step//shift_factor,
-                                      random=random)
+        points = sample_points(cont,
+                              spacing = step,
+                              shift = -step//shift_factor,
+                              mode = 'random' if random else 'grid')
 
         print("roi {} #{}:\t{:d} points sampled".format(roi["name"], roi["id"],len(points), ))
         pointroilist = [{"vertices":[pp], "area":0} for pp in points]
