@@ -243,7 +243,7 @@ class RoiReader():
 
 
     def plot_patch(self, xc, yc, patch_size, target_subsample=1,
-                   magn_base = 4, **kwargs):
+                   magn_base = 4, fig=None, ax=None, **kwargs):
         patch = self.get_patch(xc, yc, patch_size, target_subsample=target_subsample,
                                magn_base = magn_base,)
         prois = self.get_patch_rois(xc, yc, patch_size,
@@ -259,7 +259,6 @@ class RoiReader():
 
         ccycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
         ccycle = cycle(ccycle)
-        fig, ax = plt.subplots(1, **kwargs)
         ax.imshow(patch)
         for name_, gg in prois.groupby('name'):
             c = next(ccycle)
