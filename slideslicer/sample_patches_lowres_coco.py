@@ -13,13 +13,12 @@ from shapely.geometry import Polygon, MultiPolygon
 
 from pycocotools.mask import encode, decode
 from copy import deepcopy
-from extract_rois_svs_xml import extract_rois_svs_xml 
-from slideutils import (plot_contour, get_median_color, get_thumbnail_magnification,
+from slideslicer.extract_rois_svs_xml import extract_rois_svs_xml 
+from slideslicer.slideutils import (plot_contour, get_median_color, get_thumbnail_magnification,
                        CropRotateRoi, get_img_bbox, get_rotated_highres_roi, get_uniform_tiles,
                        get_contour_centre, read_roi_patches_from_slide,
                        convert_mask2contour, get_roi_dict,
-                       clip_roi_wi_bbox, sample_points_wi_contour,
-                       convert_contour2mask)
+                       clip_roi_wi_bbox,  convert_contour2mask)
 from sample_from_slide import get_tissue_rois
 
 

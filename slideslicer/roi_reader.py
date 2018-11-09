@@ -32,7 +32,8 @@ def _get_patch_(slide, xc, yc,
     size_ = [ps//(magn_base**magn_exp) for ps in patch_size]
     region_ = slide.read_region((int(xc-patch_size[1]//2), int(yc-patch_size[0]//2)), magn_exp, size_)
     if subsample!= 1.0:
-        region_ = region_.resize( [int(subsample * s) for s in region_.size], Image.ANTIALIAS)
+        region_ = region_.resize([int(subsample * s) for s in region_.size], 
+                                 openslide.Image.ANTIALIAS)
         #region_ = np.asarray(region_)[...,:3]
         #region_ = cv2.resize(region_, (0,0), fx=subsample, fy=subsample,
         #                        interpolation = cv2.INTER_AREA)
@@ -195,7 +196,10 @@ class RoiReader():
 
     @property
     def df_tissue(self):
-        return self._df[self._df.name=='tissue']
+        return self.df[self._df.name=='tissue']
+
+    def __getitem__(self, key):
+        return self.df.iloc[key]
 
     def get_patch_rois(self, xc, yc, patch_size, target_subsample=1,
                        translate=True, scale=True):
