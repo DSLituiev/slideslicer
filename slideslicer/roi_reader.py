@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 import openslide
 import shapely
-from shapely.geometry import Polygon
+from shapely import affinity
+from shapely.geometry import Polygon, MultiPolygon, MultiLineString
 from descartes import PolygonPatch
 import matplotlib.pyplot as plt
 from matplotlib import colors
@@ -15,6 +16,8 @@ from .slideutils import (get_vertices, get_roi_dict, get_median_color,
                         get_thumbnail_magnification, plot_contour)
 
 from .parse_leica_xml import parse_xml2annotations
+from .geom_tools import resolve_selfintersection
+from .slideutils import sample_points, CentredRectangle
 
 
 def _get_patch_(slide, xc, yc,
@@ -30,7 +33,7 @@ def _get_patch_(slide, xc, yc,
     subsample = magn_base**-(exp_raw-magn_exp)
 
     size_ = [ps//(magn_base**magn_exp) for ps in patch_size]
-    region_ = slide.read_region((int(xc-patch_size[1]//2), int(yc-patch_size[0]//2)), magn_exp, size_)
+    region_ = slide.read_region((int(xc-patch_size[0]//2), int(yc-patch_size[1]//2)), magn_exp, size_)
     if subsample!= 1.0:
         region_ = region_.resize([int(subsample * s) for s in region_.size], 
                                  openslide.Image.ANTIALIAS)
@@ -192,21 +195,39 @@ class RoiReader():
         if not hasattr(self, '_df'):
             self._df = pd.DataFrame(self.rois)
             self._df['polygon'] = self._df['vertices'].map(Polygon)
+            self._df['polygon'] = self._df['polygon'].map(resolve_selfintersection)
         return self._df
 
     @property
     def df_tissue(self):
         return self.df[self._df.name=='tissue']
 
+    @classmethod
+    def resolve_multipolygons(cls, df):
+        mask_multipolygon = df.polygon.map(lambda mpg: isinstance(mpg, MultiPolygon))
+        if mask_multipolygon.sum()>0:
+            df_mpg = pd.merge(
+                         df[mask_multipolygon].drop('polygon', axis=1),
+                         (df[mask_multipolygon][['polygon']]
+                              .apply(lambda x: x.apply(pd.Series).stack())
+                              .reset_index(level=1, drop=True)),
+                         right_index=True, left_index=True)
+            df = pd.concat([df[~mask_multipolygon], df_mpg])
+        mask_multistr = df.polygon.map(lambda x: isinstance(x.boundary, MultiLineString))
+        if mask_multistr.sum()>0:
+            df.loc[mask_multistr,'polygon'] = df.loc[mask_multistr,'polygon'].map(
+                    lambda pg: Polygon(pg.boundary[np.argmax(map(len, pg.boundary))]))
+        return df
+
     def __getitem__(self, key):
         return self.df.iloc[key]
 
     def get_patch_rois(self, xc, yc, patch_size, target_subsample=1,
                        translate=True, scale=True):
-        from shapely import affinity
         if isinstance(patch_size, int):
             patch_size = [patch_size]*2
         patch_size = [x  for x in patch_size]
+        #patch = CentredRectangle(xc, yc, *patch_size)
         patch = Polygon(
                 [(xc - patch_size[0]/2, yc - patch_size[1]/2),
                  (xc - patch_size[0]/2, yc + patch_size[1]/2),
@@ -225,6 +246,7 @@ class RoiReader():
                 origin = (0,0) if translate else 'center'
                 return affinity.scale(x, 1/target_subsample, 1/target_subsample, origin=origin)
             df.loc[:,'polygon'] = df['polygon'].map(scale_)
+        df = RoiReader.resolve_multipolygons(df)
         df.loc[:,'vertices'] = df['polygon'].map(lambda p: np.asarray(p.boundary.coords.xy).T.tolist())
         df.loc[:,'area'] = df['polygon'].map(lambda p: p.area)
         return df
@@ -243,32 +265,56 @@ class RoiReader():
 
 
     def plot_patch(self, xc, yc, patch_size, target_subsample=1,
-                   magn_base = 4, fig=None, ax=None, **kwargs):
+                   magn_base = 4, translate=True, scale=True,
+                   colordict = {},
+                   fig=None, ax=None, alpha=0.1, **kwargs):
         patch = self.get_patch(xc, yc, patch_size, target_subsample=target_subsample,
                                magn_base = magn_base,)
         prois = self.get_patch_rois(xc, yc, patch_size,
-                                    target_subsample=target_subsample,)
+                                    target_subsample=target_subsample,
+                                    translate=translate, scale=scale)
 
         if fig is None:
             if ax is not None:
                 fig = ax.get_figure()
             else:
-                fig, ax = plt.subplots(1, **kwargs)
+                if len(kwargs)>0:
+                    fig, ax = plt.subplots(1, **kwargs)
+                else:
+                    fig = plt.gcf()
+                    ax  = fig.gca()
         elif ax is None:
             ax = fig.gca()
 
         ccycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
         ccycle = cycle(ccycle)
-        ax.imshow(patch)
+
+        if translate:
+            extent = None
+        else:
+            extent=(xc-patch_size[0]//2,
+                    xc+patch_size[0]//2,
+                    yc+patch_size[1]//2,
+                    yc-patch_size[1]//2,
+                    )
+
+        ax.imshow(patch,
+                  extent=extent)
+
         for name_, gg in prois.groupby('name'):
-            c = next(ccycle)
+            flag = True
+            if name_ in colordict:
+                c = colordict[name_]
+            else:
+                c = next(ccycle)
             for _, pp_ in gg.iterrows():
-                print(pp_['name'])
+                #print(pp_['name'])
                 pp = pp_.polygon
                 fc = list(colors.to_rgba(c))
                 ec = list(colors.to_rgba(c))
-                fc[-1] = 0.1
-                ax.add_patch(PolygonPatch(pp, fc=fc, ec=ec, lw=2))
+                fc[-1] = alpha
+                ax.add_patch(PolygonPatch(pp, fc=fc, ec=ec, lw=2, label=name_ if flag else None))
+                flag = False
         ax.relim()
         ax.autoscale_view()
         return fig, ax, patch, prois
@@ -358,3 +404,55 @@ class RoiReader():
 
     def __len__(self):
         return len(self.rois)
+
+
+class PatchIterator():
+    def __init__(self, roireader, vertices, side=128, 
+                 subsample=8, batch_size=4, preprocess=lambda x:x,
+                 points=None,
+                 oversample=1, mode='grid'):
+        
+        self.roireader = roireader
+        self.side_magn = side*subsample
+        if points is None:
+            self.spacing = self.side_magn/oversample
+            self.points = sample_points(vertices, spacing=self.spacing, mode=mode)
+        else:
+            self.points = points
+
+        self.batch_size = batch_size
+        self.subsample = subsample
+        self.index = -1
+        self.indices = np.arange(len(self.points))
+        self.preprocess = preprocess
+
+    def __len__(self):
+        return int(np.ceil(len(self.points)/self.batch_size))
+        
+    def __getitem__(self, key):
+        start = key*self.batch_size
+        end = min(len(self.indices), (1+key)*self.batch_size)
+        assert end>start
+        batch_x = []
+        coords = []
+        for ind in range(start, end):
+            pp = self.points[self.indices[ind]]
+#             print(pp)
+            patch = self.roireader.get_patch(*pp, [self.side_magn]*2, 
+                                             target_subsample=self.subsample )
+            patch = np.asarray(patch)[...,:3]
+            patch = self.preprocess(patch)
+            batch_x.append(patch)
+            coords.append(pp)
+        return np.stack(batch_x), np.stack(coords)
+        
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        self.index += 1
+
+        if self.index >= len(self):
+            raise StopIteration
+
+        return self[self.index]
