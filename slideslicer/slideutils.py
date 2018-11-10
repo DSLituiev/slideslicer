@@ -6,7 +6,7 @@ import numpy as np
 from collections import Counter
 from itertools import product
 from copy import deepcopy
-from functools import reduce
+
 import pandas as pd
 import re
 import json
@@ -18,83 +18,8 @@ from warnings import warn
 from shapely.geometry import Polygon, MultiPolygon, MultiLineString, LineString
 from shapely.geometry import Point, MultiPoint, asMultiPoint, box
 from shapely.affinity import rotate
-
-
-
-def clean_polygon(pp):
-    coords = np.asarray(pp.boundary.coords)
-    danglingpiece = np.asarray(pp.buffer(0).boundary.coords)
-    negmask = reduce(lambda x,y: x|y, ((coords == row).all(1) for row in danglingpiece))
-    pp = Polygon(coords[~negmask])
-    return pp.buffer(0)
-
-def resolve_selfintersection(pp, areathr=1e-3, fraction=5, depth = 0):
-    pbuf = pp.buffer(0)#.interiors
-    areadiff = abs(pp.area- pbuf.area)/pp.area
-#     print("areadiff", areadiff)
-        
-    if (areadiff > areathr):
-        pp = clean_polygon(pp)
-        pp = resolve_selfintersection(pp, areathr=1e-3, fraction=3, depth=depth+1)
-        #assert len(pp.boundary.coords)>0, "zero-area polygon supplied!"
-        #vertices = np.asarray(pp.boundary)
-        ##print("shape", vertices.shape[0], len(vertices))
-        #assert len(vertices.shape)>0, "zero-shape vertices"
-        #if depth > max(fraction, 1/fraction):
-        #    break_point = 1
-        #elif depth < vertices.shape[0]:
-        #    break_point = int(vertices.shape[0]/fraction)
-        #    break_point = break_point if break_point <len(vertices) else len(vertices)-2
-        #    print("break_point", break_point)
-        #else:
-        #    raise RuntimeError("recursion is too deep")
-        #for ii in range(10):
-        #    pp = _permute_vertices_(vertices, break_point=break_point)
-        #    try:
-        #        #printi
-        #        ("output shape", np.asarray(pp.boundary).shape[0])
-        #        break
-        #    except:
-        #        pass
-        ##pp = _permute_polygon_(pp, fraction=fraction, break_point=break_point)
-        #pp = resolve_selfintersection(pp, areathr=1e-3, fraction=3, depth=depth+1)
-    else:
-        try:
-            pp = Polygon(pbuf)
-        except NotImplementedError as ee:
-            print(ee)
-            ind = np.argmax([x.area for x in pbuf])
-            return pbuf[ind]
-        
-    assert pp.is_valid
-    return pp
-
-def _permute_vertices_(vertices, fraction=3, break_point=None):
-    if break_point is None:
-        if fraction>1:
-            fraction = 1/fraction
-        break_point = int(vertices.shape[0]*fraction)
-    
-
-    pp = Polygon(np.flipud(np.vstack([vertices[break_point:],
-                                      vertices[:break_point]])))
-    return pp
-
-def _permute_polygon_(pp, fraction=3, break_point=None):
-    vertices = np.asarray(pp.boundary)
-    del pp
-    if break_point is None:
-        if fraction>1:
-            fraction = 1/fraction
-        break_point = int(vertices.shape[0]*fraction)
-    
-    break_point = break_point if break_point <len(vertices) else len(vertices)-2
-
-    pp = Polygon(np.flipud(np.vstack([vertices[break_point:],
-                                      vertices[:break_point]])))
-    return pp
-
-# see https://github.com/bgilbert/anonymize-slide
+from .geom_tools import get_contour_centre
+from .geom_tools import resolve_selfintersection
 
 # move to parse_leica_xml.py 
 def get_ellipse_points(verticeslist, num=200):
@@ -161,7 +86,7 @@ def get_median_color(slide):
                               np.asarray(slide.associated_images["thumbnail"]),
                               [0,1]).ravel()
 
-#rename: get_threshold_tissue_mask()
+
 def get_threshold_tissue_mask(img, color=False, filtersize=7,
                    lower = [0, 0, 180],
                    upper = [179, 20, 255],
@@ -226,7 +151,7 @@ def get_roi_dict(contour, name='tissue', id=0, sq_micron_per_pixel=None):
         cdict['areamicrons'] = cdict['area'] * sq_micron_per_pixel
     return cdict
 
-# rename to : convert_contour2mask
+
 def convert_contour2mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C'):
     """
     convert_contour2mask(roi, width, height, fill=1, shape='polygon', radius=3, order = 'C')
@@ -253,8 +178,9 @@ def get_region_mask(vertices, start_xy=0, size_xy=0, color=(1)):
     return mask, vertices
 
 
-# rename convert_mask2contour
+
 def convert_mask2contour(mask, minlen = 50):
+    mask = mask.astype(np.uint8)
     im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
     if minlen is not None:
@@ -280,16 +206,6 @@ def roi_loc(roi):
     xmin, ymin = roi.min(0)
     xmax, ymax = roi.max(0)
     return np.r_[xmin, ymin], np.r_[xmax-xmin, ymax-ymin]
-
-
-def get_contour_centre(vertices):
-    if len(vertices)==1:
-        return vertices[0]
-
-    mmnts = cv2.moments(np.asarray(vertices, dtype='int32'))
-    cX = int(mmnts["m10"] / mmnts["m00"])
-    cY = int(mmnts["m01"] / mmnts["m00"])
-    return (cX, cY)
 
 
 class CropRotateRoi():
@@ -420,7 +336,6 @@ def transform_roi_to_rotated_chunk(transform_mag, rr, roi_start, roi_size,
     vertices = np.asarray(rr["vertices"])
 #     print(rr["name"], left, right)
     if within_roi(vertices, roi_start, roi_size,):
-#         print(rr["name"])
         roi = rr.copy()
         centroid = get_contour_centre(roi["vertices"])
         roi["centroid_within_slice"] = within_roi(centroid, roi_start, roi_size,)
