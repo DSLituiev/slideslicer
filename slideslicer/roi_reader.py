@@ -23,11 +23,14 @@ from .slideutils import sample_points, CentredRectangle
 def _get_patch_(slide, xc, yc,
               patch_size = [1024, 1024],
               magn_base = 4,
-              target_subsample = 2,
+              scale = 2,
              ):
     """retrieve a patch from openslide with given center point, size, and subsampling rate
     currently tested only on Leica SVS slides"""
-    target_subsample = max(target_subsample, 1/target_subsample)
+    if scale>0:
+        target_subsample = max(scale, 1/scale)
+    else:
+        target_subsample = - scale
     exp_raw = np.log2(target_subsample)/np.log2(magn_base)
     magn_exp = int(np.floor(exp_raw))
     subsample = magn_base**-(exp_raw-magn_exp)
@@ -222,18 +225,15 @@ class RoiReader():
     def __getitem__(self, key):
         return self.df.iloc[key]
 
-    def get_patch_rois(self, xc, yc, patch_size, target_subsample=1,
-                       translate=True, scale=True):
+    def get_patch_rois(self, xc, yc, patch_size, scale=1,
+                       translate=True, **kwargs):
+        if 'target_subsample' in kwargs:
+            scale = kwargs.pop('target_subsample')
+            warn('deprication warning', DeprecationWarning)
         if isinstance(patch_size, int):
             patch_size = [patch_size]*2
-        patch_size = [x  for x in patch_size]
-        #patch = CentredRectangle(xc, yc, *patch_size)
-        patch = Polygon(
-                [(xc - patch_size[0]/2, yc - patch_size[1]/2),
-                 (xc - patch_size[0]/2, yc + patch_size[1]/2),
-                 (xc + patch_size[0]/2, yc + patch_size[1]/2),
-                 (xc + patch_size[0]/2, yc - patch_size[1]/2),
-                ])
+        patch_size = [x for x in patch_size]
+        patch = CentredRectangle(xc, yc, *patch_size)
         mask = self.df['polygon'].map(lambda x: patch.intersects(x))
         df = self.df[mask].copy()
         df.loc[:,'polygon'] = df['polygon'].map(lambda x: patch & x)
@@ -241,10 +241,10 @@ class RoiReader():
             def shift(x):
                 return affinity.translate(x, -patch.bounds[0], -patch.bounds[1])
             df.loc[:,'polygon'] = df['polygon'].map(shift)
-        if scale:
-            def scale_(x):
-                origin = (0,0) if translate else 'center'
-                return affinity.scale(x, 1/target_subsample, 1/target_subsample, origin=origin)
+        if scale != 1:
+            def scale_(x, translate=translate):
+                origin = (0,0) if translate else (xc, yc)
+                return affinity.scale(x, 1/scale, 1/scale, origin=origin)
             df.loc[:,'polygon'] = df['polygon'].map(scale_)
         df = RoiReader.resolve_multipolygons(df)
         df.loc[:,'vertices'] = df['polygon'].map(lambda p: np.asarray(p.boundary.coords.xy).T.tolist())
@@ -252,34 +252,45 @@ class RoiReader():
         return df
 
 
-    def get_patch(self, xc, yc, patch_size, target_subsample=1,
-                  magn_base = 4,):
+    def get_patch(self, xc, yc, patch_size, scale=1,
+                  magn_base = 4, **kwargs):
+        if 'target_subsample' in kwargs:
+            scale = kwargs.pop('target_subsample')
+            warn('deprication warning', DeprecationWarning)
         if isinstance(patch_size, int):
             patch_size = [patch_size]*2
 
         patch = _get_patch_(self.slide, xc, yc,
                             patch_size = patch_size,
                             magn_base = magn_base,
-                            target_subsample = target_subsample)
+                            scale=scale)
         return patch    
 
 
-    def plot_patch(self, xc, yc, patch_size, target_subsample=1,
-                   magn_base = 4, translate=True, scale=True,
-                   colordict = {},
+    def plot_patch(self, xc, yc, patch_size, scale=1,
+                   magn_base = 4, translate=True,
+                   colordict = {}, figsize=None,
+                   vis_scale=True,
                    fig=None, ax=None, alpha=0.1, **kwargs):
-        patch = self.get_patch(xc, yc, patch_size, target_subsample=target_subsample,
-                               magn_base = magn_base,)
-        prois = self.get_patch_rois(xc, yc, patch_size,
-                                    target_subsample=target_subsample,
-                                    translate=translate, scale=scale)
 
+        if 'target_subsample' in kwargs:
+            scale = kwargs.pop('target_subsample')
+            warn('deprication warning', DeprecationWarning)
+        if isinstance(patch_size, int) or isinstance(patch_size, float):
+            patch_size = [int(patch_size)]*2
+
+        patch = self.get_patch(xc, yc, patch_size, scale=scale, 
+                               magn_base = magn_base,)
+
+        prois = self.get_patch_rois(xc, yc, patch_size,
+                                    scale=scale,
+                                    translate=translate)
         if fig is None:
             if ax is not None:
                 fig = ax.get_figure()
             else:
-                if len(kwargs)>0:
-                    fig, ax = plt.subplots(1, **kwargs)
+                if len(kwargs)>0 or figsize is not None:
+                    fig, ax = plt.subplots(1, figsize=figsize, **kwargs)
                 else:
                     fig = plt.gcf()
                     ax  = fig.gca()
@@ -289,15 +300,27 @@ class RoiReader():
         ccycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
         ccycle = cycle(ccycle)
 
-        if translate:
-            extent = None
-        else:
-            extent=(xc-patch_size[0]//2,
-                    xc+patch_size[0]//2,
-                    yc+patch_size[1]//2,
-                    yc-patch_size[1]//2,
-                    )
+        out_patch_size = patch_size
+        if scale != 1:
+            if vis_scale:
+                out_patch_size = [int(np.round(ps/scale)) for ps in patch_size]
+                scale_ = lambda x: x
+            else:
+                def scale_(x):
+                    origin = (0,0) if translate else (xc, yc)
+                    return affinity.scale(x, scale, scale, origin=origin)
 
+        print('out_patch_size', out_patch_size)
+
+        if translate:
+            extent = (0, out_patch_size[0], out_patch_size[1], 0)
+        else:
+            extent = (xc - out_patch_size[0]//2,
+                      xc + out_patch_size[0]//2,
+                      yc + out_patch_size[1]//2,
+                      yc - out_patch_size[1]//2,
+                      )
+        print('extent', extent)
         ax.imshow(patch,
                   extent=extent)
 
@@ -310,6 +333,8 @@ class RoiReader():
             for _, pp_ in gg.iterrows():
                 #print(pp_['name'])
                 pp = pp_.polygon
+                if scale !=1:
+                    pp = scale_(pp)
                 fc = list(colors.to_rgba(c))
                 ec = list(colors.to_rgba(c))
                 fc[-1] = alpha
