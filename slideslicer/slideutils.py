@@ -617,6 +617,18 @@ def plot_contour(roi, ax=None, name = None, fontsize=12, **kwargs):
     return line
 
 
+class RectangleCornerWH(Polygon):
+    def __init__(self, x0, y0, w, h):
+        x1 = x0 + w
+        y1 = y0 + h
+        super(RectangleCornerWH, self).__init__(
+                [(x0, y0),
+                 (x0, y1),
+                 (x1, y1),
+                 (x1, y0),
+                ]
+        )
+        return
 
 class CentredRectangle(Polygon):
     def __init__(self, xc, yc, w, h):
