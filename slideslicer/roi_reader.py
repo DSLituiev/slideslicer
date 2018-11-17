@@ -226,7 +226,10 @@ class RoiReader():
         return self.df.iloc[key]
 
     def get_patch_rois(self, xc, yc, patch_size, scale=1,
-                       translate=True, **kwargs):
+                       translate=True, rle=False, **kwargs):
+
+        if rle:
+            from pycocotools._mask import encode
         if 'target_subsample' in kwargs:
             scale = kwargs.pop('target_subsample')
             warn('deprication warning', DeprecationWarning)
@@ -249,6 +252,9 @@ class RoiReader():
         df = RoiReader.resolve_multipolygons(df)
         df.loc[:,'vertices'] = df['polygon'].map(lambda p: np.asarray(p.boundary.coords.xy).T.tolist())
         df.loc[:,'area'] = df['polygon'].map(lambda p: p.area)
+        if rle and translate:
+            pass
+
         return df
 
 
