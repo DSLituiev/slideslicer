@@ -226,10 +226,28 @@ class RoiReader():
         return self.df.iloc[key]
 
     def get_patch_rois(self, xc, yc, patch_size, scale=1,
-                       translate=True, rle=False, **kwargs):
+                       translate=True, cocorle=False, **kwargs):
+        """extract rois for a given patch centered at `(xc, yc)`,
+        original size `patch_size`, given `scale`.
+        By default the patch coordinates are translated
+        so that upper left corner is at (0,0). 
+        In order to turn translation off, set `translate=False`.
+        A MS-COCO compatible RLE can be obtained with setting `cocorle=True`
 
-        if rle:
-            from pycocotools._mask import encode
+        Inputs:
+            xc         -- x-coordinate of the patch centre
+            yc         -- y-coordinate of the patch centre
+            patch_size -- original patch size
+            scale      -- downscale the patch by a given factor
+                         (provide a value >1, no upscaling foreseen)
+            translate  -- [default: True] translate the ROIs 
+                          so that upper left corner is at (0,0)
+            cocorle    -- [default: False] produce a MS-COCO RLE
+                          (adds fields for `counts` and `size`)
+        """
+
+        if cocorle:
+            from .cocohacks import convert_contour2cocorle as verts2rle
         if 'target_subsample' in kwargs:
             scale = kwargs.pop('target_subsample')
             warn('deprication warning', DeprecationWarning)
@@ -240,6 +258,7 @@ class RoiReader():
         mask = self.df['polygon'].map(lambda x: patch.intersects(x))
         df = self.df[mask].copy()
         df.loc[:,'polygon'] = df['polygon'].map(lambda x: patch & x)
+
         if translate:
             def shift(x):
                 return affinity.translate(x, -patch.bounds[0], -patch.bounds[1])
@@ -249,11 +268,20 @@ class RoiReader():
                 origin = (0,0) if translate else (xc, yc)
                 return affinity.scale(x, 1/scale, 1/scale, origin=origin)
             df.loc[:,'polygon'] = df['polygon'].map(scale_)
+
         df = RoiReader.resolve_multipolygons(df)
-        df.loc[:,'vertices'] = df['polygon'].map(lambda p: np.asarray(p.boundary.coords.xy).T.tolist())
+        df.loc[:,'vertices'] = df['polygon'].map(
+            lambda p: np.asarray(p.boundary.coords.xy).T.tolist())
         df.loc[:,'area'] = df['polygon'].map(lambda p: p.area)
-        if rle and translate:
-            pass
+        if cocorle:
+            if not translate:
+                raise NotImplementedError('coco RLE is not supported for un-translated ROIs to avoid memory overflow')
+            w, h = [int(np.round(ps/scale)) for ps in patch_size]
+            df_rle = (df.vertices
+                        .map(lambda verts: (verts2rle(verts, w, h)))
+                        .apply(pd.Series)
+                     )
+            df = pd.concat([df, df_rle], axis=1)
 
         return df
 
