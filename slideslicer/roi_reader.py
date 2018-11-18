@@ -20,6 +20,29 @@ from .geom_tools import resolve_selfintersection
 from .slideutils import sample_points, CentredRectangle
 
 
+
+class ROIFrame(pd.DataFrame):
+    def __init__(self, *args, **kwargs):
+        pd.DataFrame.__init__(self, *args, **kwargs)
+
+    def to_dict(self, orient='records'):
+        return pd.DataFrame.to_dict(self, orient=orient)
+
+    def to_json(self, path_or_buf=None, orient='records',
+                lines=False, compression=None, index=True,
+                **kwargs):
+        return pd.DataFrame.to_json(self, orient=orient,
+                lines=lines, compression=compression, index=index,
+                **kwargs)
+
+    def __getitem__(self, key):
+        data = pd.DataFrame.__getitem__(self, key)
+        if isinstance(data, pd.DataFrame):
+            return ROIFrame(data)
+        else:
+            return data
+        
+
 def _get_patch_(slide, xc, yc,
               patch_size = [1024, 1024],
               magn_base = 4,
@@ -283,7 +306,7 @@ class RoiReader():
                      )
             df = pd.concat([df, df_rle], axis=1)
 
-        return df
+        return ROIFrame(df)
 
 
     def get_patch(self, xc, yc, patch_size, scale=1,
@@ -457,7 +480,7 @@ class RoiReader():
         roi_name_counts.name = 'counts'
         roi_name_counts = roi_name_counts.to_frame()
 
-        prefix = '<h2>{} ROIs\n</h2><p>\tfrom <pre>{}</pre>\n</p>'.format(len(self), self.filenamebase + '.svs')
+        prefix = '<h3>{} ROIs\n</h3><p>\tfrom <pre>{}</pre>\n</p>'.format(len(self), self.filenamebase + '.svs')
         return prefix + roi_name_counts._repr_html_()
 
 
