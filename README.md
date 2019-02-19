@@ -1,8 +1,9 @@
-## Purpose
+## Background
 
 The challenge of whole slide imaging is that the files are of huge size (~ 3e4 x 5e4 pixels, ~300MB),
 while the tissue often occupies less than a quarter of that area, especially in core biopsy slides.
 
+# Functionality
 This package provides tools to sample and read slides and annotations together at different resolutions and locations.
 
 This package comes with a set of scripts to 
@@ -14,6 +15,8 @@ This format dramatically compresses binary masks allowing to
 store them in JSON files, preserving original label in free text form.
 
 These MS-COCO JSON masks can be converted to one-hot `[height x width x classes]` or sparse `[height x width]` format. As a rule we store them in sparse format in png files when needed.
+
+See [demo notebook](notebooks/demo-read-slide.ipynb)
 
 
 ## Setup
@@ -48,12 +51,7 @@ issue to request support / offer pull request for other formats_
 
 the input data comes as
  1. a whole slide image (WSI)
- 2. ROI outlines file (in XML format)
-
-
-## Functions
-
-See [demo notebook](notebooks/demo-read-slide.ipynb)
+ 2. ROI outlines file (in XML format -- currently Leica SVS style XML only)
 
 
 ## Pipeline scripts
