@@ -3,7 +3,7 @@
 The challenge of whole slide imaging is that the files are of huge size (~ 3e4 x 5e4 pixels, ~300MB),
 while the tissue often occupies less than a quarter of that area, especially in core biopsy slides.
 
-# Functionality
+## Functionality
 This package provides tools to sample and read slides and annotations together at different resolutions and locations.
 
 This package comes with a set of scripts to 
