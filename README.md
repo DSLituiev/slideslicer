@@ -1,9 +1,11 @@
 ## Purpose
 
-the challenge is that WSI files are of huge size (~ 3e4 x 5e4, ~300MB),
-while the tissue occupies less than a quarter of that area.
+The challenge of whole slide imaging is that the files are of huge size (~ 3e4 x 5e4 pixels, ~300MB),
+while the tissue often occupies less than a quarter of that area, especially in core biopsy slides.
 
-the set of scripts has been created to 
+This package provides tools to sample and read slides and annotations together at different resolutions and locations.
+
+This package comes with a set of scripts to 
  1. sample tissue and specific tissue features and
  2. convert ROI outlines to masks and manipulate the masks.
 
