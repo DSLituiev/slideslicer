@@ -1,5 +1,7 @@
+cython
 pycocotools
 Shapely>=1.6.4
+numpy
 pandas>=0.23
 opencv-python>=3.4.3
 lxml>==4.1
