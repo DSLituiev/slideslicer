@@ -1,5 +1,5 @@
 from distutils.core import setup
-import distutils.command.bdist_conda
+#import distutils.command.bdist_conda
 
 setup(
     name='slideslicer',
