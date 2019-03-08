@@ -1,7 +1,6 @@
 # coding: utf-8
 
 from PIL import Image
-from bs4 import BeautifulSoup
 import numpy as np
 from collections import Counter
 import pandas as pd

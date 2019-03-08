@@ -1,7 +1,6 @@
 
 # coding: utf-8
 import sys
-from bs4 import BeautifulSoup
 import numpy as np
 from collections import Counter
 from itertools import product

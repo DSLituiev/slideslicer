@@ -1,9 +1,5 @@
 
 # coding: utf-8
-
-#cell#
-
-from bs4 import BeautifulSoup
 import numpy as np
 from itertools import product
 from collections import Counter
@@ -14,9 +10,6 @@ import json
 import openslide
 from matplotlib import pyplot as plt
 import cv2
-get_ipython().magic('matplotlib inline')
-get_ipython().magic('load_ext autoreload')
-get_ipython().magic('autoreload 2')
 
 #cell#
 

@@ -27,6 +27,6 @@ setup(
         "License :: BSDv2",
         "Operating System :: OS Independent",
     ],
-    distclass=distutils.command.bdist_conda.CondaDistribution,
+    #distclass=distutils.command.bdist_conda.CondaDistribution,
     conda_buildnum=1,
 )
