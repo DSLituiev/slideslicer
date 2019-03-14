@@ -12,6 +12,8 @@ import json
 import openslide
 from PIL import Image, ImageDraw
 import cv2
+NEW_OPENCV = int(cv2.__version__.split('.')[0])>=4
+
 import numpy as np
 from warnings import warn
 from shapely.geometry import Polygon, MultiPolygon, MultiLineString, LineString
@@ -180,7 +182,10 @@ def get_region_mask(vertices, start_xy=0, size_xy=0, color=(1)):
 
 def convert_mask2contour(mask, minlen = 50):
     mask = mask.astype(np.uint8)
-    im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    if NEW_OPENCV:
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    else:
+        _, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
     if minlen is not None:
         contours = [np.squeeze(x) for x in contours if x.shape[0]>minlen]

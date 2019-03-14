@@ -281,6 +281,7 @@ class RoiReader():
         mask = self.df['polygon'].map(lambda x: patch.intersects(x))
         df = self.df[mask].copy()
         df.loc[:,'polygon'] = df['polygon'].map(lambda x: patch & x)
+        df = df[df['polygon'].map(lambda x: isinstance(x, (Polygon, MultiPolygon)))]
 
         if translate:
             def shift(x):
@@ -489,13 +490,16 @@ class RoiReader():
 
 
 class PatchIterator():
-    def __init__(self, roireader, vertices, side=128, 
+    def __init__(self, roireader, vertices=None,  
+                 points=None, side=128,
                  subsample=8, batch_size=4, preprocess=lambda x:x,
-                 points=None,
                  oversample=1, mode='grid'):
         
         self.roireader = roireader
         self.side_magn = side*subsample
+        if points is None and vertices is None:
+            raise ValueError('either `points` or `vertices` argument must be provided')
+
         if points is None:
             self.spacing = self.side_magn/oversample
             self.points = sample_points(vertices, spacing=self.spacing, mode=mode)
