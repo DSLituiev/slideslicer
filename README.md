@@ -21,28 +21,28 @@ See [demo notebook](notebooks/demo-read-slide.ipynb)
 
 ## Setup
 
-** STEP 1. ** download and install openslide (C library) [source files and instructions -- please read](https://openslide.org/download/)
+**Step 1.** download and install `openslide` (a C library) 
 
-- OPTION 1 (slow but robust): build from source
-
-    curl -LOk https://github.com/openslide/openslide/releases/download/v3.4.1/openslide-3.4.1.tar.gz
-    tar xzvf openslide-3.4.1.tar.gz
-    cd openslide-3.4.1
-    ./configure && make && make install
-
-- OPTION 2 (fast): use package manager
+- OPTION 1 (fast): use a package manager
  - on MacOS with `brew`
 
-    # install openslide on MacOS
-    brew install openslide
+       # install openslide on MacOS
+       brew install openslide
 
  - on Debian / Ubuntu
 
-    sudo apt-get install openslide-tools
+       sudo apt-get install openslide-tools
 
  - [other platforms](https://openslide.org/download/)
+ 
+- OPTION 2 (slow but robust): build from source
 
-** STEP 2. ** install the python package
+      curl -LOk https://github.com/openslide/openslide/releases/download/v3.4.1/openslide-3.4.1.tar.gz
+      tar xzvf openslide-3.4.1.tar.gz
+      cd openslide-3.4.1
+      ./configure && make && make install
+
+**Step 2.** install the python package
   
     # install dependencies
     pip install cython
@@ -59,6 +59,10 @@ the input data comes as
  1. a whole slide image (WSI)
  2. ROI outlines file (in XML format -- currently Leica SVS style XML only)
 
+## Examples
+
+- [reading a file](notebooks/demo-read-slide.ipynb)
+- [train a keras model on patches](notebooks/demo-feed-keras.ipynb)
 
 ## Pipeline scripts
 
