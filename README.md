@@ -21,28 +21,19 @@ See [demo notebook](notebooks/demo-read-slide.ipynb)
 
 ## Setup
 
-install `cocotools` (pip fails, need to run setup.py script)
-
-    git clone https://github.com/cocodataset/cocoapi
-    cd cocoapi/PythonAPI
-    pip install numpy
-    python setup.py install
-
-
 download and install openslide (C library) [source files and instructions -- please read](https://openslide.org/download/)
 
-install openslide
+    # install openslide
+
+    curl -O https://github.com/openslide/openslide/releases/download/v3.4.1/openslide-3.4.1.tar.gz
     tar xzvf openslide-3.4.1.tar.gz
     cd openslide-3.4.1
     ./configure && make && make install
-    curl -O https://github.com/openslide/openslide/releases/download/v3.4.1/openslide-3.4.1.tar.gz
 
     pip install git+https://github.com/openslide/openslide-python
-
-clone this repository with `--recursive` flag:
-
-    git clone --recursive https://github.com/DSLituiev/slideslicer
-
+    
+    # install slideslicer
+    pip install git+//github.com/DSLituiev/slideslicer
 
 ## Input data
 
