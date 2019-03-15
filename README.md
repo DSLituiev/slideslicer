@@ -21,17 +21,32 @@ See [demo notebook](notebooks/demo-read-slide.ipynb)
 
 ## Setup
 
-download and install openslide (C library) [source files and instructions -- please read](https://openslide.org/download/)
+** STEP 1. ** download and install openslide (C library) [source files and instructions -- please read](https://openslide.org/download/)
 
-    # install openslide
+- OPTION 1 (slow but robust): build from source
 
-    curl -O https://github.com/openslide/openslide/releases/download/v3.4.1/openslide-3.4.1.tar.gz
+    curl -LOk https://github.com/openslide/openslide/releases/download/v3.4.1/openslide-3.4.1.tar.gz
     tar xzvf openslide-3.4.1.tar.gz
     cd openslide-3.4.1
     ./configure && make && make install
 
-    pip install git+https://github.com/openslide/openslide-python
-    
+- OPTION 2 (fast): use package manager
+ - on MacOS with `brew`
+
+    # install openslide on MacOS
+    brew install openslide
+
+ - on Debian / Ubuntu
+
+    sudo apt-get install openslide-tools
+
+ - [other platforms](https://openslide.org/download/)
+
+** STEP 2. ** install the python package
+  
+    # install dependencies
+    pip install cython
+    pip install numpy
     # install slideslicer
     pip install git+//github.com/DSLituiev/slideslicer
 

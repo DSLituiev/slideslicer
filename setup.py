@@ -10,9 +10,9 @@ setup(
     author_email="d.lituiev@gmail.com",
     description="tools for reading Leica digital slides and annotations, and cutting them in smaller patches",
     long_description=open('README.md').read(),
-    setup_requires = ['cython','matplotlib','numpy','pandas',
+    setup_requires = ['cython','matplotlib','numpy',
                       ],
-    install_requires=['openslide_python', 'Pillow>=5.0.0', 'opencv-python',
+    install_requires=['pandas', 'openslide_python', 'Pillow>=5.0.0', 'opencv-python',
                       'scikit-image>=0.14.1', # used solely in hsv_histeq.py
                       'pycocotools',
                       'shapely', 'descartes', 
