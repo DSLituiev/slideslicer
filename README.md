@@ -16,8 +16,9 @@ store them in JSON files, preserving original label in free text form.
 
 These MS-COCO JSON masks can be converted to one-hot `[height x width x classes]` or sparse `[height x width]` format. As a rule we store them in sparse format in png files when needed.
 
-See [demo notebook](notebooks/demo-read-slide.ipynb)
-
+## Examples
+- [reading a file](notebooks/demo-read-slide.ipynb)
+- [train a keras model on patches](notebooks/demo-feed-keras.ipynb)
 
 ## Setup
 
@@ -59,10 +60,6 @@ the input data comes as
  1. a whole slide image (WSI)
  2. ROI outlines file (in XML format -- currently Leica SVS style XML only)
 
-## Examples
-
-- [reading a file](notebooks/demo-read-slide.ipynb)
-- [train a keras model on patches](notebooks/demo-feed-keras.ipynb)
 
 ## Pipeline scripts
 
