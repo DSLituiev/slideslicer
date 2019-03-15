@@ -24,19 +24,19 @@ These MS-COCO JSON masks can be converted to one-hot `[height x width x classes]
 
 **Step 1.** download and install `openslide` (a C library) 
 
-- OPTION 1 (fast): use a package manager
- - on MacOS with `brew`
++ OPTION 1 (fast): use a package manager
+  * on MacOS with `brew`
 
-       # install openslide on MacOS
-       brew install openslide
+        # install openslide on MacOS
+        brew install openslide
 
- - on Debian / Ubuntu
+  * on Debian / Ubuntu
 
-       sudo apt-get install openslide-tools
+        sudo apt-get install openslide-tools
 
- - [other platforms](https://openslide.org/download/)
+  * [other platforms](https://openslide.org/download/)
  
-- OPTION 2 (slow but robust): build from source
++ OPTION 2 (slow but robust): build from source
 
       curl -LOk https://github.com/openslide/openslide/releases/download/v3.4.1/openslide-3.4.1.tar.gz
       tar xzvf openslide-3.4.1.tar.gz
