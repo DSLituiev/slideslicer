@@ -22,6 +22,14 @@ These MS-COCO JSON masks can be converted to one-hot `[height x width x classes]
 
 ## Setup
 
+
+Option A: Use a docker image:
+
+    docker pull dslituiev/slideslicer # approx 2GB
+    docker run -it -p 8899:8899 slideslicer:v1 # run docker with a jupyter notebook on port 8899
+
+Option B: Native installation under Mac or Ubuntu/Debian:
+
 **Step 1.** download and install `openslide` (a C library) 
 
 + OPTION 1 (fast): use a package manager
