@@ -49,7 +49,7 @@ These MS-COCO JSON masks can be converted to one-hot `[height x width x classes]
     pip install cython
     pip install numpy
     # install slideslicer
-    pip install git+//github.com/DSLituiev/slideslicer
+    pip install git+https://github.com/DSLituiev/slideslicer
 
 ## Input data
 
