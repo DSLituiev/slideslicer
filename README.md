@@ -51,18 +51,23 @@ Option B: Native installation under Mac or Ubuntu/Debian:
       cd openslide-3.4.1
       ./configure && make && make install
 
-**Step 2.** install the python package
+**Step 2.** [optional] create and activate a conda environment
+    
+    ENV_NAME='slsl'
+    conda create -y -n $ENV_NAME python=3.6 && source activate $ENV_NAME
+
+**Step 3.** install the python package
   
     # install dependencies
-    pip install cython
-    pip install numpy
+    pip3 install cython
+    pip3 install numpy
     # install slideslicer
-    pip install git+https://github.com/DSLituiev/slideslicer
+    pip3 install git+https://github.com/DSLituiev/slideslicer
 
 ## Input data
 
-_Currently `slideslicer` is created to handle Aperio SVS + associated XML annotation files. Please feel free to raise an
-issue to request support / offer pull request for other formats_
+_Currently `slideslicer` is created to handle Aperio SVS + associated XML annotation files. Please feel free to **raise an
+issue** to request support or offer pull request for other formats_
 
 the input data comes as
  1. a whole slide image (WSI)
