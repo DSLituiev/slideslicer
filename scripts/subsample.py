@@ -22,8 +22,10 @@ def filegen(indir, ext='png'):
             yield ff.path
 
 
-def subsample_coco_mask(mask):
+def subsample_coco_mask(mask, factor):
     mask = Image.fromarray(mask)
+    sz = np.asarray(mask.size)
+    out_sz = (sz / factor).astype(int)
     mask.thumbnail(size, Image.ANTIALIAS)
     mask = np.asarray(mask, order='F')
     return mask
@@ -44,7 +46,7 @@ def subsample_verts(verts, factor):
     return newverts
 
 
-def subsample_roi(fn, fnout):
+def subsample_roi(fn, fnout, factor):
     with open(fn) as fh:
         rois = json.load(fh)
 
@@ -53,7 +55,7 @@ def subsample_roi(fn, fnout):
 
     for roi in rois:
         mask = decode(roi)
-        mask = subsample_coco_mask(mask)
+        mask = subsample_coco_mask(mask, factor)
         cocomask = encode(mask)
         cocomask['counts'] = cocomask['counts'].decode()
         roi.update(cocomask)
@@ -87,6 +89,11 @@ if __name__ == '__main__':
       default=1024,
       help='Original side (in pixels) of the image patches')
 
+
+    parser.add_argument('--img', dest='img', action='store_true')
+    parser.add_argument('--no-img', dest='img', action='store_false')
+    parser.set_defaults(img=True)
+
     group = parser.add_mutually_exclusive_group(required=True)
 
     group.add_argument(
@@ -103,40 +110,41 @@ if __name__ == '__main__':
     
     prms = parser.parse_args()
 
-    if args.factor is None:
-        factor = args.original_side // args.target_side 
-        side = args.target_side
+    if prms.factor is None:
+        factor = prms.original_side // prms.target_side 
+        side = prms.target_side
     else:
-        factor = args.factor
-        side = args.original_side // args.factor
+        factor = prms.factor
+        side = prms.original_side // prms.factor
     size = side, side
 
-    if len(args.outdir)==0:
-        basedir = os.path.dirname(indir.rstrip('/'))
+    if len(prms.outdir)==0:
+        basedir, set_ = os.path.split(prms.indir.rstrip('/'))
         basedir = os.path.dirname(basedir)
-        basedir = os.path.dirname(basedir)
-        outdir = "{}/data_{}_subsample_{:s}x/fullsplit/all".format(basedir, side, factor)
+        #basedir = os.path.dirname(basedir)
+        outdir = "{}/data_{}_subsample_{:d}x/fullsplit/all".format(basedir, side, factor)
     else:
-        outdir = args.outdir
+        outdir = prms.outdir
 
     print("SAVING TO:", outdir, sep='\t')
     os.makedirs(outdir, exist_ok = True)
-
-    print("SUBSAMPLING IMAGES")
-    for infile in filegen(indir):
-        outfile = get_outfile(infile)
-        os.makedirs(os.path.dirname(outfile), exist_ok=True)
-        if infile != outfile:
-            try:
-                im = Image.open(infile)
-                im.thumbnail(size, Image.ANTIALIAS)
-                im.save(outfile, "png")
-            except IOError as ee:
-                print( "cannot create thumbnail for '%s'" % infile)
-                print(ee)
+    
+    if prms.img:
+        print("SUBSAMPLING IMAGES")
+        for infile in filegen(prms.indir):
+            outfile = get_outfile(infile, outdir=outdir)
+            os.makedirs(os.path.dirname(outfile), exist_ok=True)
+            if infile != outfile:
+                try:
+                    im = Image.open(infile)
+                    im.thumbnail(size, Image.ANTIALIAS)
+                    im.save(outfile, "png")
+                except IOError as ee:
+                    print( "cannot create thumbnail for '%s'" % infile)
+                    print(ee)
 
     print("SUBSAMPLING MASKS")
-    for infile in filegen(indir, ext = '.json'):
+    for infile in filegen(prms.indir, ext = '.json'):
         outfile = get_outfile(infile, outdir=outdir)
         if infile != outfile:
             try:
