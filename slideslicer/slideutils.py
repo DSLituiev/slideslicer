@@ -664,11 +664,14 @@ class CentredRectangle(Polygon):
 
 def simulate_patch_sampling(points, size, n=None):
     '''returns rectangles of given size sampled with centres at given by points'''
+    if not isinstance(points, MultiPoint):
+        points = MultiPoint(asMultiPoint(points))
     if isinstance(size, int):
         w = h = size
     else:
         w, h = size
-    return MultiPolygon([CentredRectangle(*np.asarray(p.centroid).tolist(), w,h) for p in points[:n]])
+    return MultiPolygon([CentredRectangle(*np.asarray(p.centroid).tolist(), w,h) \
+                         for p in points[:n]])
 
 
 def sample_grid(w,h, n_points=None, spacing=None, angle=None):
