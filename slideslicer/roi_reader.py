@@ -48,6 +48,7 @@ def _get_patch_(slide, xc, yc,
               patch_size = [1024, 1024],
               magn_base = 4,
               scale = 2,
+              use_cached=True,
              ):
     """retrieve a patch from openslide with given center point, size, and subsampling rate
     currently tested only on Leica SVS slides"""
@@ -56,7 +57,10 @@ def _get_patch_(slide, xc, yc,
     else:
         target_subsample = - scale
     exp_raw = np.log2(target_subsample)/np.log2(magn_base)
-    magn_exp = int(np.floor(exp_raw))
+    if use_cached:
+        magn_exp = int(np.floor(exp_raw))
+    else:
+        magn_exp = 0
     subsample = magn_base**-(exp_raw-magn_exp)
 
     size_ = [ps//(magn_base**magn_exp) for ps in patch_size]
@@ -387,7 +391,7 @@ class RoiReader():
 
 
     def get_patch(self, xc, yc, patch_size, scale=1,
-                  magn_base = 4, **kwargs):
+                  magn_base = 4, use_cached=True, **kwargs):
         if 'target_subsample' in kwargs:
             scale = kwargs.pop('target_subsample')
             warn('deprication warning', DeprecationWarning)
@@ -397,7 +401,8 @@ class RoiReader():
         patch = _get_patch_(self.slide, xc, yc,
                             patch_size = patch_size,
                             magn_base = magn_base,
-                            scale=scale)
+                            scale=scale,
+                            use_cached=use_cached)
         return patch    
 
 
@@ -460,17 +465,18 @@ class RoiReader():
         ax.imshow(patch,
                   extent=extent)
 
-        for name_, gg in prois.groupby('name'):
-            flag = True
-            if name_ in colordict:
-                c = colordict[name_]
-            else:
-                c = next(ccycle)
-            for _, pp_ in gg.iterrows():
+        if len(prois):
+            for name_, gg in prois.groupby('name'):
+                flag = True
+                if name_ in colordict:
+                    c = colordict[name_]
+                else:
+                    c = next(ccycle)
+                for _, pp_ in gg.iterrows():
                 #print(pp_['name'])
-                pp = pp_.polygon
-                if scale !=1:
-                    pp = scale_(pp)
+                    pp = pp_.polygon
+                    if scale !=1:
+                        pp = scale_(pp)
                 fc = list(colors.to_rgba(c))
                 ec = list(colors.to_rgba(c))
                 fc[-1] = alpha
@@ -590,8 +596,12 @@ class PatchIterator():
                  subsample=8, batch_size=4, preprocess=lambda x:x,
                  points=None,
                  color_last=True,
-                 oversample=1, mode='grid'):
+                 oversample=1, mode='grid',
+                 use_cached=True,
+                 verbose=False):
 
+        self.verbose = verbose
+        self.use_cached = use_cached
         self.color_last = color_last
         self.roireader = roireader
         self.side_magn = side*subsample
@@ -622,9 +632,13 @@ class PatchIterator():
         coords = []
         for ind in range(start, end):
             pp = self.points[self.indices[ind]]
-#             print(pp)
+            if self.verbose:
+                print('{}, {}, ({}, {}), target_subsample={}, use_cached={}'
+                      .format(*pp,  *[self.side_magn]*2, self.subsample, self.use_cached))
             patch = self.roireader.get_patch(*pp, [self.side_magn]*2, 
-                                             target_subsample=self.subsample )
+                                             target_subsample=self.subsample,
+                                             use_cached=self.use_cached)
+
             patch = np.asarray(patch)[...,:3]
             patch = self.preprocess(patch)
             if not self.color_last:
