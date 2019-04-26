@@ -10,7 +10,7 @@ from descartes import PolygonPatch
 import matplotlib.pyplot as plt
 from matplotlib import colors
 from itertools import cycle
-from functools import partial
+from functools import partial, reduce
 from warnings import warn
 from .slideutils import (get_vertices, get_roi_dict, get_median_color,
                         get_threshold_tissue_mask, convert_mask2contour,
@@ -238,7 +238,7 @@ class RoiReader():
                               .apply(lambda x: x.apply(pd.Series).stack())
                               .reset_index(level=1, drop=True)),
                          right_index=True, left_index=True)
-            df = pd.concat([df[~mask_multipolygon], df_mpg])
+            df = pd.concat([df[~mask_multipolygon], df_mpg], sort=False)
         def is_multistr(x):
             try:
                 return int(isinstance(x, GeometryCollection) or isinstance(x.boundary, MultiLineString))
@@ -264,6 +264,7 @@ class RoiReader():
     def get_patch_rois(self, xc, yc, patch_size, scale=1,
                        translate=True, cocorle=False,
                        refine_tissue=None, patch_img=None,
+                       get_mask_for_names = None,
                        **kwargs):
 
         """extract rois for a given patch centered at `(xc, yc)`,
@@ -283,10 +284,13 @@ class RoiReader():
                           so that upper left corner is at (0,0)
             cocorle    -- [default: False] produce a MS-COCO RLE
                           (adds fields for `counts` and `size`)
+            get_mask_for_names -- return a binary mask given a function
+                          that takes names and returns True for matches
         """
 
         if cocorle:
             from .cocohacks import convert_contour2cocorle as verts2rle
+            from .cocohacks import decode
         if 'target_subsample' in kwargs:
             scale = kwargs.pop('target_subsample')
             warn('deprication warning', DeprecationWarning)
@@ -324,8 +328,8 @@ class RoiReader():
                     try:
                         iou_ = df_tissue.polygon.map(lambda x:pp.intersection(x).area/pp.union(x).area)
                     except:
-                        print('df_tissue')
-                        print(df_tissue)
+                        warn('df_tissue')
+                        warn(str(df_tissue))
                         pp = resolve_selfintersection(pp)
                         iou_ = df_tissue.polygon.map(lambda x:pp.intersection(x).area/pp.union(x).area)
 
@@ -335,7 +339,7 @@ class RoiReader():
                         df_tissue.loc[idx, 'id'] = kk
 
                 df = df[df.name!='tissue']
-                df = pd.concat([df, df_tissue], ignore_index=True)
+                df = pd.concat([df, df_tissue], ignore_index=True, sort=False)
 
         if translate:
             def shift(x):
@@ -348,6 +352,12 @@ class RoiReader():
             df.loc[:,'polygon'] = df['polygon'].map(scale_)
 
         df = RoiReader.resolve_multipolygons(df)
+        df['area'] = df.polygon.map(lambda x: x.area)
+        df['area_fraction'] = df['area'] / np.prod(patch_size) * scale**2
+        if translate or scale!=1:
+            df['vertices'] = df['polygon'].map(lambda x: np.asarray(x.boundary.coords))
+            pass
+
         if len(df)==0:
             return df
 
@@ -360,6 +370,13 @@ class RoiReader():
                         .apply(pd.Series)
                      )
             df = pd.concat([df, df_rle], axis=1)
+
+        if get_mask_for_names is not None:
+            sel_df = df[df.name.map(get_mask_for_names)]
+            if len(sel_df)>0:
+                return reduce(np.maximum, sel_df.apply(decode, 1))
+            else:
+                return np.zeros(df['size'].iloc[0], dtype='uint8')
 
         return df
 
@@ -384,7 +401,9 @@ class RoiReader():
                    magn_base = 4, translate=True,
                    colordict = {}, figsize=None,
                    vis_scale=True,
-                   fig=None, ax=None, alpha=0.1, **kwargs):
+                   image=True,
+                   fig=None, ax=None, alpha=0.1, lw=2,
+                   **kwargs):
 
         if 'target_subsample' in kwargs:
             scale = kwargs.pop('target_subsample')
@@ -392,12 +411,13 @@ class RoiReader():
         if isinstance(patch_size, int) or isinstance(patch_size, float):
             patch_size = [int(patch_size)]*2
 
-        patch = self.get_patch(xc, yc, patch_size, scale=scale, 
-                               magn_base = magn_base,)
+        if image:
+            patch = self.get_patch(xc, yc, patch_size, scale=scale, 
+                                   magn_base = magn_base,)
 
         prois = self.get_patch_rois(xc, yc, patch_size,
-                                    refine_tissue=True,
-                                    patch_img=patch,
+                                    refine_tissue=True if image else False,
+                                    patch_img=patch if image else None,
                                     scale=scale,
                                     translate=translate)
         if fig is None:
@@ -425,7 +445,7 @@ class RoiReader():
                     origin = (0,0) if translate else (xc, yc)
                     return affinity.scale(x, scale, scale, origin=origin)
 
-        print('out_patch_size', out_patch_size)
+        #print('out_patch_size', out_patch_size)
 
         if translate:
             extent = (0, out_patch_size[0], out_patch_size[1], 0)
@@ -435,17 +455,20 @@ class RoiReader():
                       yc + out_patch_size[1]//2,
                       yc - out_patch_size[1]//2,
                       )
-        print('extent', extent)
-        ax.imshow(patch,
-                  extent=extent)
+        #print('extent', extent)
+        if image:
+            ax.imshow(patch,
+                      extent=extent)
 
         if len(prois):
             for name_, gg in prois.groupby('name'):
                 flag = True
                 if name_ in colordict:
                     c = colordict[name_]
-                else:
+                elif not len(colordict):
                     c = next(ccycle)
+                else:
+                    continue
                 for _, pp_ in gg.iterrows():
                 #print(pp_['name'])
                     pp = pp_.polygon
@@ -454,11 +477,12 @@ class RoiReader():
                 fc = list(colors.to_rgba(c))
                 ec = list(colors.to_rgba(c))
                 fc[-1] = alpha
-                ax.add_patch(PolygonPatch(pp, fc=fc, ec=ec, lw=2, label=name_ if flag else None))
+                ax.add_patch(PolygonPatch(pp, fc=fc, ec=ec, lw=lw,
+                             label=name_ if flag else None))
                 flag = False
         ax.relim()
         ax.autoscale_view()
-        return fig, ax, patch, prois
+        return fig, ax, patch if image else None, prois
 
 
     def plot(self, fig=None, ax=None, labels=True, 
@@ -568,6 +592,8 @@ class PatchIterator():
     def __init__(self, roireader, vertices, side=128, 
                  subsample=8, batch_size=4, preprocess=lambda x:x,
                  points=None,
+                 roi=False,
+                 get_mask_for_names=None,
                  color_last=True,
                  oversample=1, mode='grid',
                  use_cached=True,
@@ -575,6 +601,8 @@ class PatchIterator():
 
         self.verbose = verbose
         self.use_cached = use_cached
+        self.roi = roi
+        self.get_mask_for_names = get_mask_for_names
         self.color_last = color_last
         self.roireader = roireader
         self.side_magn = side*subsample
@@ -595,30 +623,59 @@ class PatchIterator():
         return int(np.ceil(len(self.points)/self._batch_size))
         
     def __getitem__(self, key):
+        patch_size = [self.side_magn]*2
         start = key*self._batch_size
         end = min(len(self.indices), (1+key)*self._batch_size)
         assert end>start
         batch_x = []
         coords = []
+        if self.roi:
+            batch_roi = []
         for ind in range(start, end):
             pp = self.points[self.indices[ind]]
             if self.verbose:
                 print('{}, {}, ({}, {}), target_subsample={}, use_cached={}'
                       .format(*pp,  *[self.side_magn]*2, self.subsample, self.use_cached))
-            patch = self.roireader.get_patch(*pp, [self.side_magn]*2, 
+            patch = self.roireader.get_patch(*pp, patch_size, 
                                              target_subsample=self.subsample,
                                              use_cached=self.use_cached)
 
             patch = np.asarray(patch)[...,:3]
+            if self.roi:
+                roi_ = self.roireader.get_patch_rois(*pp, patch_size, 
+                           scale=self.subsample,
+                           translate=True, cocorle=True,
+                           refine_tissue=True, patch_img=patch,
+                           get_mask_for_names=self.get_mask_for_names,
+                           )
+                batch_roi.append(roi_)
+
             patch = self.preprocess(patch)
             if not self.color_last:
                 patch = patch.transpose(2,0,1)
             batch_x.append(patch)
             coords.append(pp)
+
+        
+
         if self.batch_size is None or self.batch_size==0:
-            return batch_x[0], coords[0]
+            batch_x = batch_x[0]
+            coords = coords[0]
+            if self.roi:
+                batch_roi = batch_roi[0]
         else:
-            return np.stack(batch_x), np.stack(coords)
+            batch_x = np.stack(batch_x)
+            coords = np.stack(coords)
+            if self.roi:
+                if (self.get_mask_for_names is not None) and \
+                        len(set([x.shape for x in batch_roi]))==1:
+                    batch_roi = np.stack(batch_roi)
+
+        if self.roi:
+            output = (batch_x, batch_roi, coords)
+        else:
+            output = (batch_x, coords)
+        return output
         
     def __iter__(self):
         return self
