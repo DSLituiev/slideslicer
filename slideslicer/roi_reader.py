@@ -172,12 +172,16 @@ class RoiReader():
         mask = get_threshold_tissue_mask(self.img, color=color, filtersize=filtersize)
         contours = convert_mask2contour(mask, minlen=minlen)
 
-
-        sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] 
-                                        for roi in self.rois])
+        if hasattr(self,'rois'):
+            sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] 
+                                            for roi in self.rois])
+            len_rois = len(self.rois)
+        else:
+            sq_micron_per_pixel = None
+            len_rois = 0
 
         self.tissue_rois = [get_roi_dict(cc*self._thumbnail_ratio,
-                                        name='tissue', id=1+nn+len(self.rois),
+                                        name='tissue', id=1+nn+len_rois,
                                         sq_micron_per_pixel=sq_micron_per_pixel) 
                             for nn,cc in enumerate(contours)]
         return self.tissue_rois 
@@ -189,7 +193,10 @@ class RoiReader():
         if not hasattr(self, 'tissue_rois'):
             self.extract_tissue(color=color, filtersize=filtersize, minlen=minlen) 
 
-        self.rois = self.rois + self.tissue_rois
+        if hasattr(self,'rois'):
+            self.rois = self.rois + self.tissue_rois
+        else:
+            self.rois = self.tissue_rois
 
         if self.verbose:
             print('-'*15)
@@ -220,9 +227,11 @@ class RoiReader():
             self._df['polygon'] = self._df['polygon'].map(resolve_selfintersection)
         return self._df
 
+
     @property
     def df_tissue(self):
         return self.df[self._df.name=='tissue']
+
 
     @classmethod
     def resolve_multipolygons(cls, df):
@@ -258,8 +267,15 @@ class RoiReader():
                     )
         return df
 
+
     def __getitem__(self, key):
         return self.df.iloc[key]
+
+
+    @classmethod
+    def empty_mask(cls, patch_size, scale=1,):
+        return np.zeros([int(np.round(x/scale)) for x in patch_size], dtype='uint8')
+
 
     def get_patch_rois(self, xc, yc, patch_size, scale=1,
                        translate=True, cocorle=False,
@@ -359,7 +375,10 @@ class RoiReader():
             pass
 
         if len(df)==0:
-            return df
+            if get_mask_for_names is not None:
+                return self.empty_mask(patch_size, scale)
+            else:
+                return df
 
         if cocorle:
             if not translate:
@@ -376,7 +395,7 @@ class RoiReader():
             if len(sel_df)>0:
                 return reduce(np.maximum, sel_df.apply(decode, 1))
             else:
-                return np.zeros(df['size'].iloc[0], dtype='uint8')
+                return self.empty_mask(patch_size, scale)
 
         return df
 
@@ -401,7 +420,7 @@ class RoiReader():
                    magn_base = 4, translate=True,
                    colordict = {}, figsize=None,
                    vis_scale=True,
-                   image=True,
+                   image=True, use_cached=True,
                    fig=None, ax=None, alpha=0.1, lw=2,
                    **kwargs):
 
@@ -413,7 +432,8 @@ class RoiReader():
 
         if image:
             patch = self.get_patch(xc, yc, patch_size, scale=scale, 
-                                   magn_base = magn_base,)
+                                   magn_base = magn_base, 
+                                   use_cached=use_cached)
 
         prois = self.get_patch_rois(xc, yc, patch_size,
                                     refine_tissue=True if image else False,
@@ -608,12 +628,14 @@ class PatchIterator():
         self.side_magn = side*subsample
         if points is None:
             self.spacing = self.side_magn/oversample
-            self.points = sample_points(vertices, spacing=self.spacing, mode=mode)
+            self.points = sample_points(vertices, spacing=self.spacing,
+                                        mode=mode)
         else:
             self.points = points
 
         self.batch_size = batch_size
-        self._batch_size = 1 if batch_size is None or batch_size==0 else batch_size
+        self._batch_size = 1 if (batch_size is None) or (batch_size==0) \
+                             else batch_size
         self.subsample = subsample
         self.index = -1
         self.indices = np.arange(len(self.points))
@@ -635,7 +657,8 @@ class PatchIterator():
             pp = self.points[self.indices[ind]]
             if self.verbose:
                 print('{}, {}, ({}, {}), target_subsample={}, use_cached={}'
-                      .format(*pp,  *[self.side_magn]*2, self.subsample, self.use_cached))
+                      .format(*pp,  *[self.side_magn]*2, 
+                              self.subsample, self.use_cached))
             patch = self.roireader.get_patch(*pp, patch_size, 
                                              target_subsample=self.subsample,
                                              use_cached=self.use_cached)
@@ -648,6 +671,8 @@ class PatchIterator():
                            refine_tissue=True, patch_img=patch,
                            get_mask_for_names=self.get_mask_for_names,
                            )
+                if not self.color_last and len(roi_.shape)>2:
+                    roi_ = roi_.transpose(2,0,1)
                 batch_roi.append(roi_)
 
             patch = self.preprocess(patch)
@@ -655,8 +680,6 @@ class PatchIterator():
                 patch = patch.transpose(2,0,1)
             batch_x.append(patch)
             coords.append(pp)
-
-        
 
         if self.batch_size is None or self.batch_size==0:
             batch_x = batch_x[0]
