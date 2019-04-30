@@ -23,7 +23,7 @@ def clean_polygon(pp):
             if len(boundary) == 0:
                 return Polygon()
             ind = np.argmax([x.area for x in  boundary])
-            print('areas', [x.area for x in  boundary])
+            warn('strange shapes: areas:\t{}'.format(str([x.area for x in  boundary])) )
             boundary = boundary[ind]
         danglingpiece = np.asarray(boundary.coords)
     except NotImplementedError as ee:
@@ -49,7 +49,8 @@ def resolve_selfintersection(pp, areathr=1e-3, fraction=5, depth = 0):
         
     if (areadiff > areathr):
         pp = clean_polygon(pp)
-        pp = resolve_selfintersection(pp, areathr=1e-3, fraction=3, depth=depth+1)
+        pp = resolve_selfintersection(pp, areathr=areathr,
+                                      fraction=3, depth=depth+1)
     else:
         try:
             pp = Polygon(pbuf)
