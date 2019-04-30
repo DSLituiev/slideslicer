@@ -148,6 +148,7 @@ def get_roi_dict(contour, name='tissue', id=0, sq_micron_per_pixel=None):
     """
     cdict = {'id':id, 
             'name': name,
+            'type':0,
             'vertices':contour.tolist(),
             'area': cv2.contourArea(np.asarray(contour, dtype='int32'))
            }
