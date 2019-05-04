@@ -130,8 +130,9 @@ class RoiReader():
                 self.rois = parse_xml2annotations(fnxml)
                 for roi in self.rois:
                     roi["name"] = roi.pop("text").lower().rstrip('.')
-            except:
+            except Exception as ee:
                 warn('ROI file not found; (supposedly "{}")'.format(fnxml))
+                warn(str(ee))
         else:
             NotImplementedError('format "%s" is not supported yet' % annotation_format)
             
@@ -208,18 +209,24 @@ class RoiReader():
         
         if remove_empty:
             self.rois = remove_empty_tissue_chunks(self.rois)
+            print('removing empty', remove_empty)
+        elif (remove_empty is None) and sum((rr['name']!='tissue' for rr in self.rois))>0:
+            self.rois = remove_empty_tissue_chunks(self.rois)
+            print('removing empty', remove_empty)
 
-            if self.verbose:
-                print('-'*45)
-                print("counts of ROIs after removing empty chunks")
-                print('-'*45)
-                roi_name_counts = pd.Series([rr["name"] for rr in self.rois]).value_counts()
-                print(roi_name_counts)
+        if self.verbose and remove_empty is not False:
+            print('-'*45)
+            print("counts of ROIs after removing empty chunks")
+            print('-'*45)
+            roi_name_counts = pd.Series([rr["name"] for rr in self.rois]).value_counts()
+            print(roi_name_counts)
 
     @property
     def df(self):
         if not hasattr(self, '_df'):
             self._df = pd.DataFrame(self.rois)
+            if len(self._df)==0:
+                return self._df
             mask_ellipse = self._df['type']==2
             self._df.loc[mask_ellipse, 'vertices'] = \
                 self._df.loc[mask_ellipse,'vertices'].map(partial(get_ellipse_verts_from_bbox, points=50))
@@ -281,6 +288,8 @@ class RoiReader():
                        translate=True, cocorle=False,
                        refine_tissue=None, patch_img=None,
                        get_mask_for_names = None,
+                       color=True,
+                       minlen = 50,
                        **kwargs):
 
         """extract rois for a given patch centered at `(xc, yc)`,
@@ -318,11 +327,9 @@ class RoiReader():
         df = self.df[mask].copy()
         df.loc[:,'polygon'] = df['polygon'].map(lambda x: patch & x)
         # refine contours of tissue
-        if refine_tissue is not None and patch_img is not None:
+        if (refine_tissue is not None) and (patch_img is not None):
             patch_img = np.asarray(patch_img)
             scale_img =  patch_size[0] / patch_img.shape[1]
-            color=True
-            minlen = 50
             filtersize = max(8, patch_img.shape[0]//16)
             mask = get_threshold_tissue_mask(patch_img,
                     color=color, filtersize=filtersize)
@@ -368,6 +375,8 @@ class RoiReader():
             df.loc[:,'polygon'] = df['polygon'].map(scale_)
 
         df = RoiReader.resolve_multipolygons(df)
+        if not len(df):
+            raise ValueError('empty ROI')
         df['area'] = df.polygon.map(lambda x: x.area)
         df['area_fraction'] = df['area'] / np.prod(patch_size) * scale**2
         if translate or scale!=1:
@@ -617,6 +626,7 @@ class PatchIterator():
                  color_last=True,
                  oversample=1, mode='grid',
                  use_cached=True,
+                 meta_str = '',
                  verbose=False):
 
         self.verbose = verbose
@@ -626,6 +636,8 @@ class PatchIterator():
         self.color_last = color_last
         self.roireader = roireader
         self.side_magn = side*subsample
+        self.meta_str = meta_str
+
         if points is None:
             self.spacing = self.side_magn/oversample
             self.points = sample_points(vertices, spacing=self.spacing,
@@ -665,12 +677,18 @@ class PatchIterator():
 
             patch = np.asarray(patch)[...,:3]
             if self.roi:
-                roi_ = self.roireader.get_patch_rois(*pp, patch_size, 
-                           scale=self.subsample,
-                           translate=True, cocorle=True,
-                           refine_tissue=True, patch_img=patch,
-                           get_mask_for_names=self.get_mask_for_names,
-                           )
+                try:
+                    roi_ = self.roireader.get_patch_rois(*pp, patch_size, 
+                               scale=self.subsample,
+                               translate=True, cocorle=True,
+                               refine_tissue=True, patch_img=patch,
+                               get_mask_for_names=self.get_mask_for_names,
+                               )
+                except Exception as ee:
+                    warn('error while processing:\n{}, x={:d}, y={:d}'.format(
+                         self.roireader.filenamebase, int(pp[0]), int(pp[1])))
+                    raise ee
+
                 if not self.color_last and len(roi_.shape)>2:
                     roi_ = roi_.transpose(2,0,1)
                 batch_roi.append(roi_)
