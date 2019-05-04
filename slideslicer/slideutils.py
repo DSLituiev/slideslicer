@@ -186,6 +186,15 @@ def get_region_mask(vertices, start_xy=0, size_xy=0, color=(1)):
 
 def convert_mask2contour(mask, minlen = 50):
     mask = mask.astype(np.uint8)
+    if all(mask.ravel()>0):
+        contours = [[
+                    (0, 0),
+                    (0, mask.shape[0]),
+                    (mask.shape[1], mask.shape[0]),
+                    (mask.shape[1], 0),
+                    (0, 0),
+                    ]]
+        return [np.asarray(contours[0])]
     contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
     if minlen is not None:
