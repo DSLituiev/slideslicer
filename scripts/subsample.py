@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import sys
 import json
@@ -75,7 +76,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'indir', type=str, help = 'input directory')
+        'indir', type=str, help = 'input directory, e.g. `fullsplit/all`')
 
     parser.add_argument(
         '--outdir',
@@ -120,9 +121,10 @@ if __name__ == '__main__':
 
     if len(prms.outdir)==0:
         basedir, set_ = os.path.split(prms.indir.rstrip('/'))
-        basedir = os.path.dirname(basedir)
+        basedir, split_ = os.path.split(basedir.rstrip('/'))
         #basedir = os.path.dirname(basedir)
-        outdir = "{}/data_{}_subsample_{:d}x/fullsplit/all".format(basedir, side, factor)
+        #basedir = os.path.dirname(basedir)
+        outdir = "{}/data_{}_subsample_{:d}x/{}/all".format(basedir, side, factor, split_)
     else:
         outdir = prms.outdir
 
