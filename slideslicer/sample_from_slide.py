@@ -25,7 +25,7 @@ from slideslicer.slideutils import (plot_contour, get_median_color,
                         CropRotateRoi,
                         get_contour_centre, read_roi_patches_from_slide,
                         clip_roi_wi_bbox, sample_points)
-
+from functools import reduce
 
 def get_img_id(svsname):
     imgid = re.sub("\.svs$","", 
@@ -188,7 +188,12 @@ def save_tissue_chunks(imgroiiter, imgid, parentdir="data",
                 lower=lower, upper=upper,
                 open=open_, close=close,
                 filtersize=filtersize)
-        with open(fn_json, 'w+') as fhj: json.dump(rois, fhj)
+        try:
+            with open(fn_json, 'w+') as fhj: json.dump(rois, fhj)
+        except TypeError as ee:
+            print([type(rr['vertices']) for rr in rois], file=sys.stderr)
+            print(rois, file=sys.stderr)
+            raise ee
 
 
 def add_roi_bytes(rois, reg,
@@ -201,13 +206,14 @@ def add_roi_bytes(rois, reg,
     if minlen==-1:
         minlen=filtersize
     rois = rois.copy()
-    tissue_roi = None
+    tissue_rois = []
+    other_rois = []
     other_mask_ = 0
     
     print('ROIS:', *[roi_['name'] for roi_ in rois])
     for roi_ in rois:
         if roi_["name"] == "tissue":
-            tissue_roi = roi_
+            tissue_rois.append(roi_)
             continue
         mask_ = convert_contour2mask(roi_["vertices"], 
                                      reg.shape[1], reg.shape[0],
@@ -216,48 +222,72 @@ def add_roi_bytes(rois, reg,
         cocomask = encode(np.asarray(mask_, dtype='uint8'))
         cocomask["counts"] = cocomask["counts"].decode('utf-8')
         roi_.update(cocomask)
-        if isinstance(roi_["vertices"], np.ndarray):
+        if isinstance(roi_["vertices"], (np.ndarray, np.array)):
             roi_["vertices"] = roi_["vertices"].tolist()
+
+        other_rois.append(roi_)
         other_mask_ = np.maximum(other_mask_, mask_)
     
-    roi_ = tissue_roi
-    if roi_ is None:
+    del rois
+
+
+    if len(tissue_rois)==0:
         warn("Someting strange is going on. Make sure no tissue chunks are missing")
         roi_ = {'vertices': []}
-    #print('tissue roi', roi_)
-    if reg is not None:
-        mask_ = get_threshold_tissue_mask(reg, color=True,
-                                filtersize=filtersize,
-                                dtype=bool,
-                                open=open, close=close,
-                                lower = lower, upper = upper)
-        if mask_.sum()==0:
-            roi_["vertices"]= []
-            print("skipping empty mask", roi_['name'], roi_['id'])
-        verts = convert_mask2contour(mask_.astype('uint8'), minlen=minlen)
-        # print("verts", len(verts))
-        if len(verts)>0:
-            #print('vertices', verts[np.argmax(map(len,verts))])
-            roi_["vertices"] = verts[np.argmax(map(len,verts))]
-        else:
-            #print("verts", len(verts), roi_["vertices"])
-            pass
-        mask_ = np.asarray(mask_, order='F')
-    else:
-        mask_ = convert_contour2mask(roi_["vertices"], reg.shape[1], reg.shape[0], 
-                             fill=1, order='F')
-        if mask_.sum()==0:
-            roi_["vertices"]= []
-            #continue
+    elif len(tissue_rois)>1 and reg is None:
+        warn('multiple tissue rois')
 
-    if isinstance(other_mask_, np.ndarray):
-        mask_ = mask_.astype(bool) & ~other_mask_.astype(bool)
-    cocomask = encode(np.asarray(mask_, dtype='uint8'))
-    cocomask["counts"] = cocomask["counts"].decode('utf-8')
-    roi_.update(cocomask)
-    if isinstance(roi_["vertices"], np.ndarray):
-        roi_["vertices"] = roi_["vertices"].tolist()   
+    for roi_ in tissue_rois:
+        if roi_ is None:
+            print("Someting strange is going on. Make sure no tissue chunks are missing")
+        if reg is not None:
+            mask_ = get_threshold_tissue_mask(reg, color=True, filtersize=filtersize, dtype=bool,
+                                    open=open, close=close,
+                                    lower = lower, upper = upper)
+            if mask_.sum()==0:
+                roi_ = None
+                print("skipping empty mask", roi_['name'], roi_['id'])
+                continue
+            verts = convert_mask2contour(mask_.astype('uint8'), minlen=minlen)
+            # print("verts", len(verts))
+            if len(verts)>0:
+                roi_["vertices"] = verts[np.argmax(map(len,verts))]
+            else:
+                #print("verts", len(verts), roi_["vertices"])
+                pass
+            mask_ = np.asarray(mask_, order='F')
+        else:
+            mask_ = convert_contour2mask(roi_["vertices"], reg.shape[1], reg.shape[0], 
+                                 fill=1, order='F')
+            if mask_.sum()==0:
+                roi_ = None
+                continue
+        if isinstance(other_mask_, np.ndarray):
+            mask_ = mask_.astype(bool) & ~other_mask_.astype(bool)
+        cocomask = encode(np.asarray(mask_, dtype='uint8'))
+        cocomask["counts"] = cocomask["counts"].decode('utf-8')
+        roi_.update(cocomask)
+
+    if len(tissue_rois)>1:
+        roi_ = tissue_rois[0]
+        mask_ = reduce(sum, (decode(rr) for rr in tissue_rois))
+        if any(mask_.ravel() >1):
+            verts = convert_mask2contour(mask_.astype('uint8'), minlen=minlen)
+            if len(verts)>0:
+                roi_["vertices"] = verts[np.argmax(map(len,verts))]
+        tissue_rois = [roi_]
+
+    rois = tissue_rois + other_rois
+
     rois = [rr for rr in rois if len(rr['vertices'])>0]
+    for roi_ in rois:
+        if isinstance(roi_["vertices"], np.ndarray):
+            roi_["vertices"] = roi_["vertices"].tolist() 
+
+    if any([not isinstance(rr['vertices'], list) for rr in rois]):
+        import ipdb
+        ipdb.set_trace()
+
     return rois
 
 
@@ -353,7 +383,7 @@ if __name__ == '__main__':
 
     # ## Read XML ROI, convert, and save as JSON
     fnjson = extract_rois_svs_xml(prms.fnxml, outdir=prms.json_dir,
-                                  remove_empty = ~prms.keep_empty,
+                                  remove_empty = not prms.keep_empty,
                                   keeplevels=prms.keep_levels)
 
     with open(fnjson,'r') as fh:
