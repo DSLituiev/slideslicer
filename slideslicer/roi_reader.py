@@ -287,6 +287,7 @@ class RoiReader():
     def get_patch_rois(self, xc, yc, patch_size, scale=1,
                        translate=True, rle=False,
                        refine_tissue=None, patch_img=None,
+                       cocorle=False,
                        **kwargs):
         """extract rois for a given patch centered at `(xc, yc)`,
         original size `patch_size`, given `scale`.
@@ -594,7 +595,6 @@ class PatchIterator():
     def __init__(self, roireader, vertices=None,  
                  points=None, side=128,
                  subsample=8, batch_size=4, preprocess=lambda x:x,
-                 points=None,
                  color_last=True,
                  oversample=1, mode='grid',
                  use_cached=True,
