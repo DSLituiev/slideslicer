@@ -229,9 +229,12 @@ class RoiReader():
                 return self._df
             mask_ellipse = self._df['type']==2
             self._df.loc[mask_ellipse, 'vertices'] = \
-                self._df.loc[mask_ellipse,'vertices'].map(partial(get_ellipse_verts_from_bbox, points=50))
+                self._df.loc[mask_ellipse,'vertices'].map(
+                    partial(get_ellipse_verts_from_bbox, points=50))
             self._df['polygon'] = self._df['vertices'].map(Polygon)
             self._df['polygon'] = self._df['polygon'].map(resolve_selfintersection)
+            self._df = RoiReader.resolve_multipolygons(self._df)
+            self._df.reset_index(drop=True, inplace=True)
         return self._df
 
 
@@ -344,6 +347,7 @@ class RoiReader():
                             'polygon': p} for p in tissue_polygons]
                 df_tissue = pd.DataFrame(df_tissue)
                 df_tissue.polygon = df_tissue.polygon.map(resolve_selfintersection)
+                df_tissue = RoiReader.resolve_multipolygons(df_tissue)
                 # match old ROI ids 
                 df_tissue_old = df[df.name=='tissue']
                 #if 'polygon' not in df_tissue:
@@ -353,8 +357,10 @@ class RoiReader():
                     except:
                         warn('df_tissue')
                         warn(str(df_tissue))
-                        pp = resolve_selfintersection(pp)
-                        iou_ = df_tissue.polygon.map(lambda x:pp.intersection(x).area/pp.union(x).area)
+                        pps = resolve_selfintersection(pp)
+                        if len(pps)>0:
+                            warn('more than one rois detected')
+                        iou_ = df_tissue.polygon.map(lambda x:pps.intersection(x).area/pps.union(x).area)
 
                     iou_ = iou_[iou_>0.5]
                     if len(iou_):

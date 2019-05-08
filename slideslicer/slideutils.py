@@ -563,8 +563,8 @@ def remove_outlier_vertices(vertices, size_xy, verbose=True):
                                     ]))
     vertices = vertices.copy()
     roi_polygon = Polygon(np.asarray(vertices))
-    roi_polygon = resolve_selfintersection(roi_polygon)
-    intersection_ = rectangle.intersection(roi_polygon)
+    roi_polygons = resolve_selfintersection(roi_polygon)
+    intersection_ = rectangle.intersection(roi_polygons)
     
     if not isinstance(intersection_, Polygon):
         if len(intersection_) == 0:
@@ -633,8 +633,14 @@ def rectangle_intersection(a,b):
 
 
 
-def plot_contour(roi, ax=None, name = None, fontsize=12, **kwargs):
+def plot_contour(roi, close=None, ax=None, name = None, fontsize=12, **kwargs):
     from matplotlib import pyplot as plt
+    if close is not False:
+        if tuple(roi[0]) != tuple(roi[-1]):
+            if isinstance(roi, np.ndarray):
+                roi = roi.tolist()
+            roi = roi + [roi[0]]
+
     roi = np.asarray(roi)
     if ax is None:
         ax = plt

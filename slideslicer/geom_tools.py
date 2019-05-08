@@ -1,7 +1,7 @@
 from functools import reduce
 import numpy as np
 import shapely
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 from shapely.geometry import MultiLineString
 import cv2
 from warnings import warn
@@ -39,28 +39,32 @@ def clean_polygon(pp):
     return pp.buffer(0)
 
 
-def resolve_selfintersection(pp, areathr=1e-3, fraction=5, depth = 0):
+def resolve_selfintersection(pp, areathr=1e-3, areakeep=100,
+                             fraction=5, depth=0):
+    """ reslove self-intersection for a shapely.geometry.Polygon object
+    param: areathr  -- min area difference 
+    """
     pbuf = pp.buffer(0)#.interiors
     try:
         areadiff = abs(pp.area- pbuf.area)/pp.area
     except ZeroDivisionError:
-        return pp
+        return MultiPolygon([pp])
 
-        
     if (areadiff > areathr):
         pp = clean_polygon(pp)
-        pp = resolve_selfintersection(pp, areathr=areathr,
+        pps = resolve_selfintersection(pp, areathr=areathr,
                                       fraction=3, depth=depth+1)
+        return pps
     else:
         try:
             pp = Polygon(pbuf)
+            assert pp.is_valid
+            return MultiPolygon([pp])
         except NotImplementedError as ee:
             #warn(str(ee))
             ind = np.argmax([x.area for x in pbuf])
-            return pbuf[ind]
-        
-    assert pp.is_valid
-    return pp
+            ind = [ii for ii, x in enumerate(pbuf) if x.area > areakeep]
+            return MultiPolygon([pbuf[ii] for ii in ind])
 
 
 def _permute_vertices_(vertices, fraction=3, break_point=None):

@@ -22,25 +22,6 @@ from slideslicer.slideutils import (plot_contour, get_median_color, get_thumbnai
 from sample_from_slide import get_tissue_rois
 
 
-def resolve_selfintersection(pp, areathr=1e-3, fraction=3):
-    pbuf = pp.buffer(0)#.interiors
-    areadiff = abs(pp.area- pbuf.area)/pp.area
-#     print("areadiff", areadiff)
-    if (areadiff > areathr):
-        pp = _permute_polygon_(pp, fraction=fraction)
-        pp = resolve_selfintersection(pp, areathr=1e-3, fraction=3)
-    else:
-        try:
-            pp = Polygon(pbuf)
-        except NotImplementedError as ee:
-            print(ee)
-            ind = np.argmax([x.area for x in pbuf])
-            return pbuf[ind]
-        
-    assert pp.is_valid
-    return pp
-
-
 def _permute_polygon_(pp, fraction=3):
     if fraction>1:
         fraction = 1/fraction
