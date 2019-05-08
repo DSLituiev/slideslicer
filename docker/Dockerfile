@@ -27,8 +27,9 @@ COPY 14112.* data/
 #  rm cookie
 COPY resnet50_mouse_gloms_scale4.h5 data/
 
-RUN ln -s data slideslicer
+RUN ln -s /data slideslicer
 RUN pip3 install scikit-learn tensorflow keras
+CMD mkdir -p slideslicer/notebooks
 
 CMD cd slideslicer/notebooks && jupyter-notebook --port 8899 --ip=0.0.0.0 --allow-root
 
