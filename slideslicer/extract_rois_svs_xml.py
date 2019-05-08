@@ -10,6 +10,8 @@ import pandas as pd
 from PIL import Image
 import numpy as np
 from shapely.geometry import Polygon
+from warnings import warn
+
 from .parse_leica_xml import parse_xml2annotations
 
 from .slideutils import (get_vertices, get_roi_dict, get_median_color,
@@ -47,7 +49,12 @@ def extract_rois_svs_xml(fnxml, remove_empty=True, outdir=None, minlen=50, keepl
     ############################
     # parsing XML
     ############################
-    roilist = parse_xml2annotations(fnxml)
+    try:
+        roilist = parse_xml2annotations(fnxml)
+    except OSError as ee:
+        roilist = []
+        warn(str(ee))
+
     for roi in roilist:
         roi["name"] = roi.pop("text").lower().rstrip('.')
     ############################
