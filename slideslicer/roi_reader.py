@@ -372,6 +372,7 @@ class RoiReader():
         df.loc[:,'vertices'] = df['polygon'].map(
             lambda p: np.asarray(p.boundary.coords.xy).T.tolist())
         df.loc[:,'area'] = df['polygon'].map(lambda p: p.area)
+
         if cocorle:
             if not translate:
                 raise NotImplementedError('coco RLE is not supported for un-translated ROIs to avoid memory overflow')
