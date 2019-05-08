@@ -101,7 +101,11 @@ def get_threshold_tissue_mask(img, color=False, filtersize=7,
     kernel = (filtersize,filtersize)
     if color:
         # For HSV, Hue range is [0,179], Saturation range is [0,255] and Value range is [0,255].
-        imghsv = cv2.cvtColor(img,  cv2.COLOR_BGR2HSV)
+        try:
+            imghsv = cv2.cvtColor(img,  cv2.COLOR_BGR2HSV)
+        except TypeError as te:
+            warn('type of the input image is not supported:\t{}'.format(img.dtype))
+            raise te
         imghsv[:,:,-1] = cv2.GaussianBlur(imghsv[:,:,-1],kernel,0)
         imghsv[:,:,1] = cv2.GaussianBlur(imghsv[:,:,1],kernel,0)
         lower = np.asarray(lower)
@@ -181,7 +185,7 @@ def get_region_mask(vertices, start_xy=0, size_xy=0, color=(1)):
 
 def convert_mask2contour(mask, minlen = 50):
     mask = mask.astype(np.uint8)
-    im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     
     if minlen is not None:
         contours = [np.squeeze(x) for x in contours if x.shape[0]>minlen]
@@ -440,6 +444,7 @@ def read_roi_patches_from_slide(slide, roilist,
                         allcomponents = False,
                         nomask=False,
                         verbose=False,
+                        check_point_num = False,
                        ):
     """
     Input:
@@ -478,8 +483,18 @@ def read_roi_patches_from_slide(slide, roilist,
     slide_w, slide_h = slide.dimensions
     for roi in roilist:
         if maxarea is not None and (roi['area'] > maxarea):
+            warn('too large ROI\t{}'.format(str(roi['area'])))
             continue
-        xc, yc = get_contour_centre(roi["vertices"])
+        if check_point_num and len(roi["vertices"]) < 3:
+            warn('# vertices < 3\t{}'.format(str(roi)))
+            continue
+        try:
+            xc, yc = get_contour_centre(roi["vertices"])
+        except ZeroDivisionError as ee:
+            #warn(str(ee))
+            print('vertices')
+            print(roi["vertices"])
+            raise ee
         x = min(slide_w - target_size[1], max(0, xc - target_size[1]//2))
         y = min(slide_h - target_size[0], max(0, yc - target_size[0]//2))
         start_xy = (x,y)
@@ -588,8 +603,12 @@ def clip_roi_wi_bbox(patch_bbox, other_roi, other_bbox=None):
 
     if rectangle_intersection(patch_bbox, other_bbox) is not None:
         px, py, pw, ph = patch_bbox
-        other_roi = shift_vertices(other_roi, [px, py], [pw, ph])
-        return other_roi
+        try:
+            other_roi = shift_vertices(other_roi, [px, py], [pw, ph])
+            return other_roi
+        except ValueError as ee:
+            warn(str(ee))
+            return None
     else:
         return None
 

@@ -8,6 +8,8 @@ import pandas as pd
 import os
 import re
 import json
+from warnings import warn
+
 import openslide
 import cv2
 from pycocotools.mask import encode, decode
@@ -44,7 +46,7 @@ def get_prefix(imgid, pos, name, tissueid, id, parentdir = "data", suffix=''):
     return prefix
 
 
-def summarize_rois_wi_patch(rois, bg_names = ["tissue"]):
+def summarize_rois_wi_patch(rois, bg_names = ["tissue"], frac_thr=16):
     names = []
     areas = []
     ids = []
@@ -66,10 +68,16 @@ def summarize_rois_wi_patch(rois, bg_names = ["tissue"]):
                      .agg({"area":sum, "id": "first"})
                      .sort_values("area", ascending=False)
               )
-    if len(areasum)==1:
+    if len(areasum) == 0:
+        return {'name':'blank', 
+            "id": tissue_id,
+            "tissue_id": tissue_id,
+            "stats": dfareas.to_dict(orient='records')
+            }
+    elif len(areasum)==1:
         name = areasum.index[0]
         id = areasum["id"][0]
-    elif areasum["area"][0]/areasum["area"][1] > 3:
+    elif areasum["area"][0]/areasum["area"][1] > frac_thr:
         name = areasum.index[0]
         id = areasum["id"][0]
     else:
@@ -118,7 +126,7 @@ def get_tissue_rois(slide,
     tissue_rois = [roi for roi in roilist if roi['name']=='tissue']
 
     for roi in tissue_rois:
-        print("id", roi["id"])
+        print("tissue roi, id", roi["id"])
         cont = roi["vertices"]
         points = sample_points(cont,
                               spacing = step,
@@ -157,9 +165,10 @@ def save_tissue_chunks(imgroiiter, imgid, parentdir="data",
                        close=50,
                        open_=30,
                        filtersize = 20,
+                       frac_thr=16,
                        ):
     for ii, (reg, rois, _, start_xy) in enumerate(imgroiiter):
-        sumdict = summarize_rois_wi_patch(rois, bg_names = [])
+        sumdict = summarize_rois_wi_patch(rois, bg_names = [], frac_thr=frac_thr)
         prefix = get_prefix(imgid, start_xy, sumdict["name"], sumdict["id"], ii,
                             parentdir=parentdir,)
 
@@ -195,12 +204,14 @@ def add_roi_bytes(rois, reg,
     tissue_roi = None
     other_mask_ = 0
     
+    print('ROIS:', *[roi_['name'] for roi_ in rois])
     for roi_ in rois:
         if roi_["name"] == "tissue":
             tissue_roi = roi_
             continue
-        mask_ = convert_contour2mask(roi_["vertices"], reg.shape[1], reg.shape[0],
-                             fill=1, order='F')
+        mask_ = convert_contour2mask(roi_["vertices"], 
+                                     reg.shape[1], reg.shape[0],
+                                     fill=1, order='F')
 
         cocomask = encode(np.asarray(mask_, dtype='uint8'))
         cocomask["counts"] = cocomask["counts"].decode('utf-8')
@@ -209,39 +220,44 @@ def add_roi_bytes(rois, reg,
             roi_["vertices"] = roi_["vertices"].tolist()
         other_mask_ = np.maximum(other_mask_, mask_)
     
-    for roi_ in [tissue_roi]:
-        if roi_ is None:
-            print("Someting strange is going on. Make sure no tissue chunks are missing")
-        if reg is not None:
-            mask_ = get_threshold_tissue_mask(reg, color=True, filtersize=filtersize, dtype=bool,
-                                    open=open, close=close,
-                                    lower = lower, upper = upper)
-            if mask_.sum()==0:
-                roi_ = None
-                print("skipping empty mask", roi_['name'], roi_['id'])
-                continue
-            verts = convert_mask2contour(mask_.astype('uint8'), minlen=minlen)
-            # print("verts", len(verts))
-            if len(verts)>0:
-                roi_["vertices"] = verts[np.argmax(map(len,verts))]
-            else:
-                #print("verts", len(verts), roi_["vertices"])
-                pass
-            mask_ = np.asarray(mask_, order='F')
+    roi_ = tissue_roi
+    if roi_ is None:
+        warn("Someting strange is going on. Make sure no tissue chunks are missing")
+        roi_ = {'vertices': []}
+    #print('tissue roi', roi_)
+    if reg is not None:
+        mask_ = get_threshold_tissue_mask(reg, color=True,
+                                filtersize=filtersize,
+                                dtype=bool,
+                                open=open, close=close,
+                                lower = lower, upper = upper)
+        if mask_.sum()==0:
+            roi_["vertices"]= []
+            print("skipping empty mask", roi_['name'], roi_['id'])
+        verts = convert_mask2contour(mask_.astype('uint8'), minlen=minlen)
+        # print("verts", len(verts))
+        if len(verts)>0:
+            #print('vertices', verts[np.argmax(map(len,verts))])
+            roi_["vertices"] = verts[np.argmax(map(len,verts))]
         else:
-            mask_ = convert_contour2mask(roi_["vertices"], reg.shape[1], reg.shape[0], 
-                                 fill=1, order='F')
-            if mask_.sum()==0:
-                roi_ = None
-                continue
-        if isinstance(other_mask_, np.ndarray):
-            mask_ = mask_.astype(bool) & ~other_mask_.astype(bool)
-        cocomask = encode(np.asarray(mask_, dtype='uint8'))
-        cocomask["counts"] = cocomask["counts"].decode('utf-8')
-        roi_.update(cocomask)
-        if isinstance(roi_["vertices"], np.ndarray):
-            roi_["vertices"] = roi_["vertices"].tolist()   
+            #print("verts", len(verts), roi_["vertices"])
+            pass
+        mask_ = np.asarray(mask_, order='F')
+    else:
+        mask_ = convert_contour2mask(roi_["vertices"], reg.shape[1], reg.shape[0], 
+                             fill=1, order='F')
+        if mask_.sum()==0:
+            roi_["vertices"]= []
+            #continue
 
+    if isinstance(other_mask_, np.ndarray):
+        mask_ = mask_.astype(bool) & ~other_mask_.astype(bool)
+    cocomask = encode(np.asarray(mask_, dtype='uint8'))
+    cocomask["counts"] = cocomask["counts"].decode('utf-8')
+    roi_.update(cocomask)
+    if isinstance(roi_["vertices"], np.ndarray):
+        roi_["vertices"] = roi_["vertices"].tolist()   
+    rois = [rr for rr in rois if len(rr['vertices'])>0]
     return rois
 
 
@@ -281,15 +297,22 @@ if __name__ == '__main__':
       help='maximal area of a roi')
 
     parser.add_argument(
-      'fnxml',
+      '--fnxml',
+      dest='fnxml',
       type=str,
-      help='The XML file for ROI.')
+      help='The XML files for ROI.')
 
     parser.add_argument(
       '--all-grid',
       action='store_true',
       default=False,
       help='store all grid patches (by defaut grid patches that overlap features will be removed)')
+
+    parser.add_argument(
+      '--target-sampling',
+      action='store_true',
+      default=False,
+      help='store only grid patches')
 
     parser.add_argument(
       '--keep-levels',
@@ -378,39 +401,40 @@ if __name__ == '__main__':
         print(mask.max())
 
     #############################
-    print("READING TARGETED ROIS", file=sys.stderr)
+    if prms.target_sampling:
+        print("READING TARGETED ROIS", file=sys.stderr)
 
-    imgroiiter = read_roi_patches_from_slide(slide, roilist,
-                            target_size = target_size,
-                            maxarea = prms.max_area,
-                            nchannels=3,
-                            allcomponents=True,
-                           )
+        imgroiiter = read_roi_patches_from_slide(slide, roilist,
+                                target_size = target_size,
+                                maxarea = prms.max_area,
+                                nchannels=3,
+                                allcomponents=True,
+                               )
 
-    print("READING AND SAVING SMALLER ROIS (GLOMERULI, INFLAMMATION LOCI ETC.)",
-          file=sys.stderr) 
+        print("READING AND SAVING SMALLER ROIS (GLOMERULI, INFLAMMATION LOCI ETC.)",
+              file=sys.stderr) 
 
-    for reg, rois,_, start_xy in imgroiiter:
-        sumdict = summarize_rois_wi_patch(rois, bg_names = ["tissue"])
-        prefix = get_prefix(imgid, start_xy, sumdict["name"], sumdict["tissue_id"],
-                            sumdict["id"], parentdir=outdir, suffix='-targeted')
-        #fn_summary_json = prefix + "-summary.json"
-        fn_json = prefix + ".json"
-        fnoutpng = prefix + '.png'
-        print(fnoutpng)
-        os.makedirs(os.path.dirname(fn_json), exist_ok=True)
-        
-        #with open(fn_summary_json, 'w+') as fhj: json.dump(sumdict, fhj)
-        if isinstance(reg, Image.Image):
-            reg.save(fnoutpng)
-        else:
-            Image.fromarray(reg).save(fnoutpng)
-        
-        rois = add_roi_bytes(rois, reg, lower=lower, upper=upper,
-                             close=close,
-                             open=open_,
-                             filtersize = filtersize)
-        with open(fn_json, 'w+') as fhj: json.dump( rois, fhj)
+        for reg, rois,_, start_xy in imgroiiter:
+            sumdict = summarize_rois_wi_patch(rois, bg_names = ["tissue"], frac_thr=16)
+            prefix = get_prefix(imgid, start_xy, sumdict["name"], sumdict["tissue_id"],
+                                sumdict["id"], parentdir=outdir, suffix='-targeted')
+            #fn_summary_json = prefix + "-summary.json"
+            fn_json = prefix + ".json"
+            fnoutpng = prefix + '.png'
+            print(fnoutpng)
+            os.makedirs(os.path.dirname(fn_json), exist_ok=True)
+            
+            #with open(fn_summary_json, 'w+') as fhj: json.dump(sumdict, fhj)
+            if isinstance(reg, Image.Image):
+                reg.save(fnoutpng)
+            else:
+                Image.fromarray(reg).save(fnoutpng)
+            
+            rois = add_roi_bytes(rois, reg, lower=lower, upper=upper,
+                                 close=close,
+                                 open=open_,
+                                 filtersize = filtersize)
+            with open(fn_json, 'w+') as fhj: json.dump( rois, fhj)
 
     print("READING AND SAVING _FEATURELESS_ / NORMAL TISSUE", file=sys.stderr)
 
@@ -427,7 +451,9 @@ if __name__ == '__main__':
                                             normal_only = not prms.all_grid,
                                            ):
             # save
+            print('saving tissue chunk')
             save_tissue_chunks(tissue_chunk_iter, imgid, parentdir=outdir,
                                close=close,
                                open_=open_,
+                               frac_thr=16,
                                filtersize = filtersize)
