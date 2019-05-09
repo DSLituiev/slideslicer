@@ -468,21 +468,22 @@ class RoiReader():
 
         if len(prois):
             for name_, gg in prois.groupby('name'):
+                print(name_)
                 flag = True
                 if name_ in colordict:
                     c = colordict[name_]
                 else:
                     c = next(ccycle)
+                fc = list(colors.to_rgba(c))
+                ec = list(colors.to_rgba(c))
+                fc[-1] = alpha
                 for _, pp_ in gg.iterrows():
                 #print(pp_['name'])
                     pp = pp_.polygon
                     if scale !=1:
                         pp = scale_(pp)
-                fc = list(colors.to_rgba(c))
-                ec = list(colors.to_rgba(c))
-                fc[-1] = alpha
-                ax.add_patch(PolygonPatch(pp, fc=fc, ec=ec, lw=2, label=name_ if flag else None))
-                flag = False
+                    ax.add_patch(PolygonPatch(pp, fc=fc, ec=ec, lw=2, label=name_ if flag else None))
+                    flag = False
         ax.relim()
         ax.autoscale_view()
         return fig, ax, patch, prois
