@@ -15,7 +15,7 @@ def _parse_vertices_(reg):
     return vertices
 
 
-def _parse_xml_region_all_attrs_(reg, vertices_np=False):
+def _parse_xml_region_all_attrs_(reg, vertices_np=False, name=None):
     attrs = dict(reg.attrib)
     types_ = {'Id':int,
               'Type':int,
@@ -43,7 +43,8 @@ def _parse_xml_region_all_attrs_(reg, vertices_np=False):
 #        vv = attrs[kk]
 #        vv = int(vv) if len(vv)>0 else -1
 #        attrs[kk] = vv
-
+    if name is not None and (attrs['Text'] is None or attrs['Text']==''):
+        attrs['Text'] = name
     attrs['Vertices'] = _parse_vertices_(reg)
     if vertices_np:
         attrs['Vertices'] = np.asarray(attrs['Vertices'])
@@ -79,15 +80,21 @@ def parse_xml2annotations(fnxml):
          - vertices : list of [(x1, y1), (x2, y2), ...] 
     """
     root = lxml.etree.parse(fnxml)
-    # Get all "Region" elements in the tree
-    regions = root.xpath('//*/Region')
-#     print(len(regions), "regions")
-    annotations = []
-    for reg in regions:
-        #import ipdb; ipdb.set_trace()
-        #annotations.append(_parse_xml_region_(reg))
-        annotations.append(_parse_xml_region_all_attrs_(reg))
-    return annotations
+    rois = []
+
+    annotations = root.xpath('//*/Annotation')
+    for ann in annotations:
+        try:
+            attrbs = ann.xpath('./Attributes')[0]
+            attrb = attrbs.xpath('''./Attribute[contains(@Name,'Description')]''')[0]
+            name = attrb.xpath('./@Value')
+            name = name[0]
+        except:
+            name = None
+        # Get all "Region" elements in the tree
+        for reg in ann.xpath('./*/Region'):
+            rois.append(_parse_xml_region_all_attrs_(reg, name=name))
+    return rois
 
 # legacy
 def xml_to_annotations(x):
