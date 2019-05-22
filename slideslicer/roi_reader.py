@@ -154,7 +154,7 @@ class RoiReader():
                 for roi in self.rois:
                     roi["name"] = roi.pop("text").lower().rstrip('.')
             except:
-                warn('ROI file not found; (supposedly "{}")'.format(fnxml))
+                warn('ROI file not found;\nexpected:\t{}'.format(fnxml))
         else:
             NotImplementedError('format "%s" is not supported yet' % annotation_format)
             
@@ -195,12 +195,16 @@ class RoiReader():
         mask = get_threshold_tissue_mask(self.img, color=color, filtersize=filtersize)
         contours = convert_mask2contour(mask, minlen=minlen)
 
-
-        sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] 
-                                        for roi in self.rois])
+        if hasattr(self,'rois'):
+            sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] 
+                                            for roi in self.rois])
+            len_rois = len(self.rois)
+        else:
+            sq_micron_per_pixel = None
+            len_rois = 0
 
         self.tissue_rois = [get_roi_dict(cc*self._thumbnail_ratio,
-                                        name='tissue', id=1+nn+len(self.rois),
+                                        name='tissue', id=1+nn+len_rois,
                                         sq_micron_per_pixel=sq_micron_per_pixel) 
                             for nn,cc in enumerate(contours)]
         return self.tissue_rois 
@@ -212,7 +216,10 @@ class RoiReader():
         if not hasattr(self, 'tissue_rois'):
             self.extract_tissue(color=color, filtersize=filtersize, minlen=minlen) 
 
-        self.rois = self.rois + self.tissue_rois
+        if hasattr(self,'rois'):
+            self.rois = self.rois + self.tissue_rois
+        else:
+            self.rois = self.tissue_rois
 
         if self.verbose:
             print('-'*15)
@@ -336,6 +343,11 @@ class RoiReader():
         df = self.df[mask].copy()
         df.loc[:,'polygon'] = df['polygon'].map(lambda x: patch & x)
         df = df[df['polygon'].map(lambda x: isinstance(x, (Polygon, MultiPolygon)))]
+        if len(df)==0:
+            if get_mask_for_names is not None:
+                return self.empty_mask(patch_size, scale)
+            else:
+                return df
         # refine contours of tissue
         if refine_tissue is not None and patch_img is not None:
             patch_img = np.asarray(patch_img)
@@ -357,7 +369,12 @@ class RoiReader():
                 df_tissue = pd.DataFrame(df_tissue)
                 df_tissue.polygon = df_tissue.polygon.map(resolve_selfintersection)
                 # match old ROI ids 
-                df_tissue_old = df[df.name=='tissue']
+                try:
+                    df_tissue_old = df[df['name']=='tissue']
+                except Exception as ee:
+                    warn('df')
+                    warn(str(df))
+                    raise ee
                 #if 'polygon' not in df_tissue:
                 for kk,pp in df_tissue_old.set_index('id')['polygon'].items():
                     try:
