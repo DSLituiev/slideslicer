@@ -163,7 +163,7 @@ class RoiReader():
 
         if threshold_tissue:
             self.add_tissue(remove_empty=remove_empty,
-                   color=threshold_color, filtersize=7, minlen=minlen)
+                            color=threshold_color, filtersize=7, minlen=minlen)
 
         if save:
             self.save()
@@ -231,10 +231,12 @@ class RoiReader():
         
         if remove_empty:
             self.rois = remove_empty_tissue_chunks(self.rois)
-            print('removing empty', remove_empty)
+            if self.verbose:
+                print('removing empty', remove_empty)
         elif (remove_empty is None) and sum((rr['name']!='tissue' for rr in self.rois))>0:
             self.rois = remove_empty_tissue_chunks(self.rois)
-            print('removing empty', remove_empty)
+            if self.verbose:
+                print('removing empty', remove_empty)
 
         if self.verbose and remove_empty is not False:
             print('-'*45)
@@ -248,6 +250,9 @@ class RoiReader():
     def df(self):
         if not hasattr(self, '_df'):
             self._df = pd.DataFrame(self.rois)
+            if len(self.rois) == 0:
+                self._df = pd.DataFrame({'name':[], 'type':[], 'polygon':[], 'vertices': []})
+                return self._df
             mask_ellipse = self._df['type']==2
             self._df.loc[mask_ellipse, 'vertices'] = \
                 self._df.loc[mask_ellipse,'vertices'].map(partial(get_ellipse_verts_from_bbox, points=50))
@@ -303,7 +308,7 @@ class RoiReader():
                             dtype='uint8')
 
     def get_patch_rois(self, xc, yc, patch_size, scale=1,
-                       translate=True, rle=False,
+                       translate=True,
                        refine_tissue=None, patch_img=None,
                        get_mask_for_names = None,
                        cocorle=False,
@@ -454,6 +459,7 @@ class RoiReader():
 
     def plot_patch(self, xc, yc, patch_size, scale=1,
                    magn_base=4, translate=True,
+                   cocorle=False,
                    image=True, use_cached=True,
                    colordict={}, figsize=None,
                    vis_scale=True, lw=2,
@@ -473,7 +479,8 @@ class RoiReader():
                                     refine_tissue=True if image else False,
                                     patch_img=patch if image else None,
                                     scale=scale,
-                                    translate=translate)
+                                    translate=translate,
+                                    cocorle=cocorle)
         if fig is None:
             if ax is not None:
                 fig = ax.get_figure()
