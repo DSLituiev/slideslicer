@@ -132,6 +132,9 @@ class RoiReader():
         Inputs:
         inputfile     -- xml or svs file path
         remove_empty  -- remove empty chunks of tissue
+                          - True:   remove
+                          - False:  don't remove
+                          - None:   remove only if other rois are present
         outdir        -- (optional); save into an alternative directory
         minlen        -- minimal length of tissue chunk contour in thumbnail image
         keeplevels    -- number of file path elements to keep 
@@ -212,6 +215,15 @@ class RoiReader():
 
     def add_tissue(self, remove_empty=True,
                    color=False, filtersize=7, minlen=50):
+        '''Inputs:
+        - remove_empty: 
+            True:   remove
+            False:  don't remove
+            None:   remove only if other rois are present
+        - color       -- color-based thresholding to obtain tissue contours
+        - filtersize  -- size of the median filter
+        - minlen      -- minimal tissue contour length
+        '''
                    
         if not hasattr(self, 'tissue_rois'):
             self.extract_tissue(color=color, filtersize=filtersize, minlen=minlen) 
