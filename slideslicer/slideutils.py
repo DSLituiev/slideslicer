@@ -194,6 +194,14 @@ def convert_mask2contour(mask, minlen = 50):
     
     if minlen is not None:
         contours = [np.squeeze(x) for x in contours if x.shape[0]>minlen]
+
+    if (len(contours) == 0) & mask.all():
+        contours = [np.asarray([(0, 0),
+                          (0, mask.shape[1]),
+                          (mask.shape[0], mask.shape[1]),
+                          (mask.shape[0], 0),
+                          (0, 0),
+                         ])]
     return contours
 
 
