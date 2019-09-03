@@ -557,6 +557,7 @@ class RoiReader():
 
     def plot(self, fig=None, ax=None, labels=True, 
              colors = {}, image=True, annotations=True,
+             styles = {},
              **kwargs):
         left = 0
         top = 0
@@ -582,9 +583,16 @@ class RoiReader():
             ccycle = cycle(ccycle[:-1])
             for kk,vv in self.df.groupby('name'):
                 if kk == 'tissue':
-                    if len(colors):
+
+                    if len(styles):
+                        if kk in styles:
+                            st = styles[kk]
+                        else:
+                            continue
+                    elif len(colors):
+                        st = {}
                         if kk in colors:
-                            cc = colors[kk]
+                            st['c'] = colors[kk]
                         else:
                             continue
                     else:
@@ -595,21 +603,27 @@ class RoiReader():
                         vert = roi['vertices']
                         centroid = (sum((x[0] for x in vert)) / len(vert),
                                     sum((x[1] for x in vert)) / len(vert))
-                        plot_contour(vert, label=kk if start else None, c=cc, ax=ax)
+                        plot_contour(vert, label=kk if start else None, ax=ax, **st)
                         if labels:
                             ax.text(*centroid, label, color=last_color)
                         start = False 
                 else:
-                    if len(colors):
+                    if len(styles):
+                        if kk in styles:
+                            st = styles[kk]
+                        else:
+                            continue
+                    elif len(colors):
+                        st = {}
                         if kk in colors:
-                            cc = colors[kk]
+                            st['c'] = colors[kk]
                         else:
                             continue
                     else:
                         cc = next(ccycle)
                     start = True
                     for vert in vv['vertices']:
-                        plot_contour(vert, label=kk if start else None, c=cc, ax=ax)
+                        plot_contour(vert, label=kk if start else None, ax=ax, **st)
                         start = False 
                 
         return fig, ax

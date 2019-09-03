@@ -23,7 +23,7 @@ def clean_polygon(pp):
             if len(boundary) == 0:
                 return Polygon()
             ind = np.argmax([x.area for x in  boundary])
-            print('areas', [x.area for x in  boundary])
+            #warn('multiple areas\t{}'.format(str([x.area for x in  boundary])))
             boundary = boundary[ind]
         danglingpiece = np.asarray(boundary.coords)
     except NotImplementedError as ee:
