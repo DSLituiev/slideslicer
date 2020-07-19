@@ -610,13 +610,12 @@ class RoiReader():
                     kk = group_keys
 
                 if kk == 'tissue':
+                    st = {}
                     if len(styles):
                         if kk in styles:
                             st = styles[kk]
                         else:
                             continue
-                    else:
-                        st = {}
                     
                     if 'color' in vv.columns:
                         st['c'] = cc
