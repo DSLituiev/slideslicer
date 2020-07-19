@@ -87,9 +87,9 @@ def find_chunk_content(roilist):
     for roi in roilist:
         try:
             if roi["name"]=="tissue":
-                pgs_tissue[roi['id']] = Polygon(roi["vertices"])
+                pgs_tissue[roi['name']] = Polygon(roi["vertices"])
             else:
-                pgs_feature[roi['id']] = Polygon(roi["vertices"])
+                pgs_feature[roi['name']] = Polygon(roi["vertices"])
         except ValueError as ee:
             warn(str(ee))
             continue
@@ -111,7 +111,7 @@ def remove_empty_tissue_chunks(roilist):
     """removes tissue chunks that contain no annotation contours within"""
     chunk_content = find_chunk_content(roilist)
     empty_chunks = set([kk for kk,vv in chunk_content.items() if len(vv)==0])
-    return [roi for roi in roilist if roi['id'] not in empty_chunks]
+    return [roi for roi in roilist if roi['name'] not in empty_chunks]
 
 
 class RoiReader():
@@ -122,7 +122,7 @@ class RoiReader():
                   threshold_tissue=True, remove_empty=True,
                   threshold_color=False,
                   alt_annotation_file=None,
-                  save=True, outdir=None, minlen=50,
+                  save=False, outdir=None, minlen=50,
                   annotation_format='leica',
                   slide_format='leica',
                   verbose=True):
@@ -130,15 +130,19 @@ class RoiReader():
         extract and save rois
 
         Inputs:
-        inputfile     -- xml or svs file path
+        inputfile     -- whole slide imaging file path
         remove_empty  -- remove empty chunks of tissue
+                          - True:   remove
+                          - False:  don't remove
+                          - None:   remove only if other rois are present
         outdir        -- (optional); save into an alternative directory
         minlen        -- minimal length of tissue chunk contour in thumbnail image
         keeplevels    -- number of file path elements to keep 
                          when saving to provided `outdir`
                          (1 -- filename only; 2 -- incl 1 directory)
         """
-        self.filenamebase = re.sub('.svs$','', re.sub(".xml$", "", inputfile))
+        self.inputfile = inputfile
+        self.filenamebase = re.sub('.(svs|tif)$','', re.sub(".xml$", "", inputfile))
         self.verbose = verbose
         ############################
         # parsing annotations
@@ -152,7 +156,7 @@ class RoiReader():
             try:
                 self.rois = parse_xml2annotations(fnxml)
                 for roi in self.rois:
-                    roi["name"] = roi.pop("text").lower().rstrip('.')
+                    roi['name'] = roi['name']
             except:
                 warn('ROI file not found;\nexpected:\t{}'.format(fnxml))
         else:
@@ -161,9 +165,16 @@ class RoiReader():
         # for an ellipse, 
         #    area = $\pi \times r \times R$
 
+        if not isinstance(threshold_tissue, bool) and isinstance(threshold_tissue, int):
+            threshold = threshold_tissue
+            threshold_tissue = True
+        else:
+            threshold = None
+
         if threshold_tissue:
             self.add_tissue(remove_empty=remove_empty,
-                   color=threshold_color, filtersize=7, minlen=minlen)
+                            color=threshold_color, filtersize=7,
+                            minlen=minlen, threshold=threshold)
 
         if save:
             self.save()
@@ -174,7 +185,8 @@ class RoiReader():
 
     def load_thumbnail(self):
         slide = self.slide
-        self.img = np.asarray(slide.associated_images["thumbnail"])
+        #self.img = np.asarray(slide.associated_images["thumbnail"])
+        self.img = np.asarray(slide.get_thumbnail((500,500)))
         self.width, self.height = slide.dimensions
         self.median_color = get_median_color(slide)
         self._thumbnail_ratio = get_thumbnail_magnification(slide)
@@ -182,25 +194,32 @@ class RoiReader():
 
     @property
     def slide(self):
-        fnsvs = self.filenamebase + ".svs"
-        slide_ = openslide.OpenSlide(fnsvs)
+        slide_ = openslide.OpenSlide(self.inputfile)
         return slide_
 
 
-    def extract_tissue(self, color=False, filtersize=7, minlen=50):
+    def extract_tissue(self, color=False, filtersize=7, minlen=50, threshold=None):
         ## Extract tissue chunk ROIs
         self.load_thumbnail()
 
         ## Extract mask and contours
-        mask = get_threshold_tissue_mask(self.img, color=color, filtersize=filtersize)
+        if threshold is None:
+            mask = get_threshold_tissue_mask(self.img, color=color, filtersize=filtersize)
+        else:
+            mask = np.asarray(self.img.mean(-1) > threshold, dtype = np.uint8)
+        print("mask type:", mask.dtype, mask.shape)
+
         contours = convert_mask2contour(mask, minlen=minlen)
 
         if hasattr(self,'rois'):
+            if hasattr(rois[0], "areamicrons"):
             sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] 
                                             for roi in self.rois])
+            else:
+                sq_micron_per_pixel = None
+
             len_rois = len(self.rois)
         else:
-            sq_micron_per_pixel = None
             len_rois = 0
 
         self.tissue_rois = [get_roi_dict(cc*self._thumbnail_ratio,
@@ -211,10 +230,21 @@ class RoiReader():
 
 
     def add_tissue(self, remove_empty=True,
-                   color=False, filtersize=7, minlen=50):
+                   color=False, filtersize=7, minlen=50,
+                   threshold=None):
+        '''Inputs:
+        - remove_empty: 
+            True:   remove
+            False:  don't remove
+            None:   remove only if other rois are present
+        - color       -- color-based thresholding to obtain tissue contours
+        - filtersize  -- size of the median filter
+        - minlen      -- minimal tissue contour length
+        '''
                    
         if not hasattr(self, 'tissue_rois'):
-            self.extract_tissue(color=color, filtersize=filtersize, minlen=minlen) 
+            self.extract_tissue(color=color, filtersize=filtersize,
+                                 minlen=minlen, threshold=threshold)
 
         if hasattr(self,'rois'):
             self.rois = self.rois + self.tissue_rois
@@ -231,10 +261,12 @@ class RoiReader():
         
         if remove_empty:
             self.rois = remove_empty_tissue_chunks(self.rois)
-            print('removing empty', remove_empty)
+            if self.verbose:
+                print('removing empty', remove_empty)
         elif (remove_empty is None) and sum((rr['name']!='tissue' for rr in self.rois))>0:
             self.rois = remove_empty_tissue_chunks(self.rois)
-            print('removing empty', remove_empty)
+            if self.verbose:
+                print('removing empty', remove_empty)
 
         if self.verbose and remove_empty is not False:
             print('-'*45)
@@ -248,6 +280,9 @@ class RoiReader():
     def df(self):
         if not hasattr(self, '_df'):
             self._df = pd.DataFrame(self.rois)
+            if len(self.rois) == 0:
+                self._df = pd.DataFrame({'name':[], 'type':[], 'polygon':[], 'vertices': []})
+                return self._df
             mask_ellipse = self._df['type']==2
             self._df.loc[mask_ellipse, 'vertices'] = \
                 self._df.loc[mask_ellipse,'vertices'].map(partial(get_ellipse_verts_from_bbox, points=50))
@@ -303,7 +338,7 @@ class RoiReader():
                             dtype='uint8')
 
     def get_patch_rois(self, xc, yc, patch_size, scale=1,
-                       translate=True, rle=False,
+                       translate=True,
                        refine_tissue=None, patch_img=None,
                        get_mask_for_names = None,
                        cocorle=False,
@@ -376,7 +411,7 @@ class RoiReader():
                     warn(str(df))
                     raise ee
                 #if 'polygon' not in df_tissue:
-                for kk,pp in df_tissue_old.set_index('id')['polygon'].items():
+                for kk,pp in df_tissue_old.set_index('name')['polygon'].items():
                     try:
                         iou_ = df_tissue.polygon.map(lambda x:pp.intersection(x).area/pp.union(x).area)
                     except:
@@ -454,6 +489,7 @@ class RoiReader():
 
     def plot_patch(self, xc, yc, patch_size, scale=1,
                    magn_base=4, translate=True,
+                   cocorle=False,
                    image=True, use_cached=True,
                    colordict={}, figsize=None,
                    vis_scale=True, lw=2,
@@ -473,7 +509,8 @@ class RoiReader():
                                     refine_tissue=True if image else False,
                                     patch_img=patch if image else None,
                                     scale=scale,
-                                    translate=translate)
+                                    translate=translate,
+                                    cocorle=cocorle)
         if fig is None:
             if ax is not None:
                 fig = ax.get_figure()
@@ -538,6 +575,7 @@ class RoiReader():
 
     def plot(self, fig=None, ax=None, labels=True, 
              colors = {}, image=True, annotations=True,
+             styles = {},
              **kwargs):
         left = 0
         top = 0
@@ -561,36 +599,63 @@ class RoiReader():
             ccycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
             last_color = ccycle[-1]
             ccycle = cycle(ccycle[:-1])
-            for kk,vv in self.df.groupby('name'):
+            group_columns = ['name']
+            if 'color' in self.df.columns:
+                group_columns.append('color')
+
+            for group_keys,vv in self.df.groupby(group_columns):
+                if 'color' in self.df.columns:
+                    kk, cc = group_keys
+                else:
+                    kk = group_keys
+
                 if kk == 'tissue':
-                    if len(colors):
-                        if kk in colors:
-                            cc = colors[kk]
+                    if len(styles):
+                        if kk in styles:
+                            st = styles[kk]
                         else:
                             continue
                     else:
-                        cc = [0.25]*3
+                        st = {}
+                    
+                    if 'color' in vv.columns:
+                        st['c'] = cc
+                    elif len(colors):
+                        if kk in colors:
+                            st['c'] = colors[kk]
+                        else:
+                            continue
+                    else:
+                        st['c'] = [0.25]*3
+
                     start = True
                     for kr, roi in vv.iterrows():
                         label = '{} #{}'.format(kk, roi['id'])
                         vert = roi['vertices']
                         centroid = (sum((x[0] for x in vert)) / len(vert),
                                     sum((x[1] for x in vert)) / len(vert))
-                        plot_contour(vert, label=kk if start else None, c=cc, ax=ax)
+                        plot_contour(vert, label=kk if start else None, ax=ax, **st)
                         if labels:
                             ax.text(*centroid, label, color=last_color)
                         start = False 
                 else:
-                    if len(colors):
+                    if len(styles):
+                        if kk in styles:
+                            st = styles[kk]
+                        else:
+                            continue
+                    elif len(colors):
+                        st = {}
                         if kk in colors:
-                            cc = colors[kk]
+                            st['c'] = colors[kk]
                         else:
                             continue
                     else:
                         cc = next(ccycle)
+                        st = {'c': cc}
                     start = True
                     for vert in vv['vertices']:
-                        plot_contour(vert, label=kk if start else None, c=cc, ax=ax)
+                        plot_contour(vert, label=kk if start else None, ax=ax, **st)
                         start = False 
                 
         return fig, ax
@@ -638,6 +703,8 @@ class RoiReader():
 
 
     def __len__(self):
+#         if not hasattr(self, 'rois'):
+#                return 0 ## or None
         return len(self.rois)
 
 
