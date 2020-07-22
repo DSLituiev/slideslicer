@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 from itertools import cycle
 from functools import partial, reduce
-from warnings import warn
+import logging
 from .slideutils import (get_vertices, get_roi_dict, get_median_color,
                         get_threshold_tissue_mask, convert_mask2contour,
                         get_thumbnail_magnification, plot_contour)
@@ -19,7 +19,7 @@ from .slideutils import (get_vertices, get_roi_dict, get_median_color,
 from .parse_leica_xml import parse_xml2annotations
 from .geom_tools import resolve_selfintersection, get_ellipse_verts_from_bbox
 from .slideutils import sample_points, CentredRectangle
-
+import concurrent
 
 
 class ROIFrame(pd.DataFrame):
@@ -91,7 +91,7 @@ def find_chunk_content(roilist):
             else:
                 pgs_feature[roi['name']] = Polygon(roi["vertices"])
         except ValueError as ee:
-            warn(str(ee))
+            logging.warning(str(ee))
             continue
 
     tissue_contains = dict(zip(pgs_tissue.keys(), [[] for _ in range(len(pgs_tissue))]))
@@ -158,7 +158,9 @@ class RoiReader():
                 for roi in self.rois:
                     roi['name'] = roi['name']
             except:
-                warn('ROI file not found;\nexpected:\t{}'.format(fnxml))
+                logging.debug('ROI file not found;\nexpected:\t{}'.format(fnxml))
+        elif annotation_format == None:
+            pass
         else:
             NotImplementedError('format "%s" is not supported yet' % annotation_format)
             
@@ -207,20 +209,16 @@ class RoiReader():
             mask = get_threshold_tissue_mask(self.img, color=color, filtersize=filtersize)
         else:
             mask = np.asarray(self.img.mean(-1) > threshold, dtype = np.uint8)
-        print("mask type:", mask.dtype, mask.shape)
 
         contours = convert_mask2contour(mask, minlen=minlen)
 
-        if hasattr(self,'rois'):
-            if hasattr(rois[0], "areamicrons"):
-            sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] 
-                                            for roi in self.rois])
-            else:
-                sq_micron_per_pixel = None
-
-            len_rois = len(self.rois)
-        else:
-            len_rois = 0
+        # if hasattr(self,'rois'):
+        #     sq_micron_per_pixel = np.median([roi["areamicrons"] / roi["area"] 
+        #                                     for roi in self.rois])
+        #     len_rois = len(self.rois)
+        # else:
+        sq_micron_per_pixel = None
+        len_rois = 0
 
         self.tissue_rois = [get_roi_dict(cc*self._thumbnail_ratio,
                                         name='tissue', id=1+nn+len_rois,
@@ -369,7 +367,7 @@ class RoiReader():
             from .cocohacks import decode
         if 'target_subsample' in kwargs:
             scale = kwargs.pop('target_subsample')
-            warn('deprication warning', DeprecationWarning)
+            logging.warning('deprication warning: use "scale" instead of "target_subsample"')
         if isinstance(patch_size, int):
             patch_size = [patch_size]*2
         patch_size = [x for x in patch_size]
@@ -407,8 +405,8 @@ class RoiReader():
                 try:
                     df_tissue_old = df[df['name']=='tissue']
                 except Exception as ee:
-                    warn('df')
-                    warn(str(df))
+                    logging.debug('df')
+                    logging.debug(str(df))
                     raise ee
                 #if 'polygon' not in df_tissue:
                 for kk,pp in df_tissue_old.set_index('name')['polygon'].items():
@@ -475,7 +473,7 @@ class RoiReader():
                   magn_base = 4, use_cached=True, **kwargs):
         if 'target_subsample' in kwargs:
             scale = kwargs.pop('target_subsample')
-            warn('deprication warning', DeprecationWarning)
+            logging.warning('deprication warning: use "scale" instead of "target_subsample"')
         if isinstance(patch_size, int):
             patch_size = [patch_size]*2
 
@@ -497,7 +495,7 @@ class RoiReader():
 
         if 'target_subsample' in kwargs:
             scale = kwargs.pop('target_subsample')
-            warn('deprication warning', DeprecationWarning)
+            logging.warning('deprication warning')
         if isinstance(patch_size, int) or isinstance(patch_size, float):
             patch_size = [int(patch_size)]*2
 
@@ -610,12 +608,13 @@ class RoiReader():
                     kk = group_keys
 
                 if kk == 'tissue':
-                    st = {}
                     if len(styles):
                         if kk in styles:
                             st = styles[kk]
                         else:
                             continue
+                    else:
+                        st = {}
                     
                     if 'color' in vv.columns:
                         st['c'] = cc
@@ -707,6 +706,16 @@ class RoiReader():
         return len(self.rois)
 
 
+    def sample_points(self, spacing=512*2/3, mode='grid', num_workers=None):
+        # loop through and find all tissues
+        function = partial(sample_points, spacing=spacing,  mode=mode)
+        polygons = self.df_tissue.polygon.tolist() 
+        with concurrent.futures.ThreadPoolExecutor(num_workers) as executor:
+            points = executor.map(function, polygons)
+        points = np.vstack(list(points)).astype(int)
+        return points
+
+
 class PatchIterator():
     def __init__(self, roireader, vertices=None,  
                  points=None, side=128,
@@ -716,6 +725,7 @@ class PatchIterator():
                  roi = False,
                  get_mask_for_names = None,
                  use_cached=True,
+                 num_workers=None,
                  verbose=False):
 
         self.verbose = verbose
@@ -725,14 +735,14 @@ class PatchIterator():
         self.color_last = color_last
         self.roireader = roireader
         self.side_magn = side*subsample
-        if points is None and vertices is None:
-            raise ValueError('either `points` or `vertices` argument must be provided')
-
-        if points is None:
-            self.spacing = self.side_magn/oversample
+        self.spacing = self.side_magn/oversample
+        if points is not None:
+            self.points = points
+        elif vertices is not None:
             self.points = sample_points(vertices, spacing=self.spacing, mode=mode)
         else:
-            self.points = points
+            self.points = roireader.sample_points(spacing=self.spacing, 
+                            mode=mode, num_workers=num_workers)
 
         self.batch_size = batch_size
         self._batch_size = 1 if batch_size is None or batch_size==0 else batch_size
@@ -774,7 +784,7 @@ class PatchIterator():
                                get_mask_for_names=self.get_mask_for_names,
                                )
                 except Exception as ee:
-                    warn('error while processing:\n{}, x={:d}, y={:d}'.format(
+                    logging.warning('error while processing:\n{}, x={:d}, y={:d}'.format(
                          self.roireader.filenamebase, int(pp[0]), int(pp[1])))
                     raise ee
 
