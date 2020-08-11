@@ -16,6 +16,12 @@ store them in JSON files, preserving original label in free text form.
 
 These MS-COCO JSON masks can be converted to one-hot `[height x width x classes]` or sparse `[height x width]` format. As a rule we store them in sparse format in png files when needed.
 
+## Extras
+
+- [deidentification scripts](deidentification)
+- [script to export annotations from QPath](scripts/export_qupath_roi_json.groovy)
+
+
 ## Examples
 - [reading a file](notebooks/demo-read-slide.ipynb)
 - [train a keras model on patches](notebooks/demo-feed-keras.ipynb)
